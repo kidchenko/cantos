@@ -14,6 +14,8 @@ pub mod page;
 pub mod window_gtk;
 #[cfg(target_os = "macos")]
 pub mod window_mac;
+#[cfg(windows)]
+pub mod window_win;
 
 use std::path::PathBuf;
 use tao::dpi::LogicalSize;

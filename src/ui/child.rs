@@ -97,7 +97,7 @@ impl Drop for Child {
 // The window's side, where a native window exists (see `SettingsUi`).
 
 /// A call from the tray, as the child reads it.
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "linux", windows))]
 #[derive(serde::Deserialize, Debug)]
 pub struct Push {
     pub push: String,
@@ -106,7 +106,7 @@ pub struct Push {
 }
 
 /// The child's side: send one message to the tray.
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "linux", windows))]
 pub fn send(msg: &serde_json::Value) {
     let mut out = std::io::stdout().lock();
     let _ = writeln!(out, "{msg}");

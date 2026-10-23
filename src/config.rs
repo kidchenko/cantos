@@ -155,7 +155,7 @@ pub enum SettingsUi {
 
 impl SettingsUi {
     /// Whether this platform has a native window yet.
-    pub const NATIVE_AVAILABLE: bool = cfg!(any(target_os = "macos", target_os = "linux"));
+    pub const NATIVE_AVAILABLE: bool = cfg!(any(target_os = "macos", target_os = "linux", windows));
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]

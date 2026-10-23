@@ -90,6 +90,11 @@ fn main() {
         ui::window_gtk::run();
         return;
     }
+    #[cfg(windows)]
+    if std::env::args().any(|a| a == ui::child::FLAG) {
+        ui::window_win::run();
+        return;
+    }
 
     log_startup();
 
