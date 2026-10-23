@@ -1,20 +1,24 @@
 //! The settings page protocol: what the page can ask for, and what we push
 //! back into it.
 //!
-//! Two directions, both defined here so the contract is in one file:
+//! Three channels, all defined here so the contract is in one file:
 //!
 //!   * page -> Rust is [`Msg`], a JSON object tagged with `cmd`.
-//!   * Rust -> page is the `push_*`/[`toast`] functions, which evaluate a
-//!     `window.__hc.<name>(...)` call in the document.
+//!   * Rust -> page is the `push_*`/[`toast`] functions, which call
+//!     `window.__hc.<name>(...)` in the document, or send the same call to the
+//!     native window (see [`super::Settings::push`]).
+//!   * Before any of that, [`platform_script`] tells the page which platform
+//!     it is on: the actions on offer, and what the keys and settings are
+//!     called here. The page builds its controls from it.
 //!
-//! Every string that crosses into JavaScript goes through [`json`]. Paths and
+//! Every argument crosses as a JSON value, never spliced in as text. Paths and
 //! OS error messages end up in these calls, and one stray quote would
-//! otherwise turn a status message into a syntax error — or worse.
+//! otherwise turn a status message into a syntax error, or worse.
 
 use super::Settings;
+use crate::config::SharedConfig;
 use crate::config::{Config, MonitorMode};
-use crate::watcher::SharedConfig;
-use crate::{autostart, geometry, log};
+use crate::{actions, autostart, geometry, log};
 use serde::Deserialize;
 
 /// Commands the settings page can send us.
@@ -37,12 +41,86 @@ pub enum Msg {
     Reset,
     OpenLog,
     OpenConfigDir,
+    /// Use the native settings window (`true`) or this web one.
+    SettingsUi {
+        native: bool,
+    },
+    /// macOS: the corners as the page now wants them, written to the Dock.
+    /// Sent whole, so a preset that changes all four restarts the Dock once.
+    #[cfg(target_os = "macos")]
+    Native {
+        corners: Box<[crate::native::NativeCorner; 4]>,
+    },
 }
 
 impl Msg {
     pub fn parse(body: &str) -> Option<Self> {
         serde_json::from_str(body).ok()
     }
+}
+
+/// `window.__platform = {...}`, run before the page's own script.
+///
+/// Static for the life of the process, so it rides on the webview's
+/// initialisation script rather than the state push: the page needs it to
+/// build its dropdowns, before it has asked for anything.
+pub fn platform_script() -> String {
+    let actions: Vec<_> = actions::CATALOG
+        .iter()
+        .map(|(group, items)| serde_json::json!([group, items]))
+        .collect();
+    let (modifiers, autostart, drag_hint) = if cfg!(target_os = "macos") {
+        (
+            [
+                ("ctrl", "Control"),
+                ("alt", "Option"),
+                ("shift", "Shift"),
+                ("win", "Command"),
+            ],
+            "Open at login",
+            "Dragging into a corner never fires it",
+        )
+    } else if cfg!(target_os = "linux") {
+        (
+            [
+                ("ctrl", "Ctrl"),
+                ("alt", "Alt"),
+                ("shift", "Shift"),
+                ("win", "Super"),
+            ],
+            "Start on login",
+            "Dragging into a corner never fires it",
+        )
+    } else {
+        (
+            [
+                ("ctrl", "Ctrl"),
+                ("alt", "Alt"),
+                ("shift", "Shift"),
+                ("win", "Windows"),
+            ],
+            "Start with Windows",
+            "Snapping a window to a corner stays a snap",
+        )
+    };
+    // macOS fronts the Dock's own hot corners (see `native`): the page shows
+    // one modifier per corner, as System Settings does, and hides the
+    // settings that only Cantos's own detector has.
+    #[cfg(target_os = "macos")]
+    let (native, untestable) = (true, actions::UNTESTABLE);
+    #[cfg(not(target_os = "macos"))]
+    let (native, untestable): (bool, &[&str]) = (false, &[]);
+    let platform = serde_json::json!({
+        "os": std::env::consts::OS,
+        "native": native,
+        "untestable": untestable,
+        "nativeUi": crate::config::SettingsUi::NATIVE_AVAILABLE,
+        "actions": actions,
+        "modifiers": modifiers,
+        "autostartLabel": autostart,
+        "dragHint": drag_hint,
+    });
+    format!("window.__platform = {platform};")
 }
 
 /// Everything the page needs to render itself from scratch.
@@ -58,8 +136,20 @@ pub fn push_state(s: &Settings, cfg: &SharedConfig) {
         .unwrap_or_default();
 
     let Ok(guard) = cfg.lock() else { return };
+    // On a Mac most corners are the Dock's, never config.json's, so the page
+    // gets the effective set, with a key each (see `native::effective`).
+    #[cfg(target_os = "macos")]
+    let (config, native) = {
+        let native = crate::native::effective(&guard);
+        let mut view = guard.clone();
+        view.corners = native.clone().map(|c| c.action);
+        (view, Some(native))
+    };
+    #[cfg(not(target_os = "macos"))]
+    let (config, native): (Config, Option<()>) = (guard.clone(), None);
     let state = serde_json::json!({
-        "config":    &*guard,
+        "config":    config,
+        "native":    native,
         "displays":  displays,
         "hitboxes":  hitboxes,
         "version":   env!("CARGO_PKG_VERSION"),
@@ -67,29 +157,30 @@ pub fn push_state(s: &Settings, cfg: &SharedConfig) {
         "logPath":   log_path,
         "configDir": config_dir,
     });
-    s.eval(&format!("window.__hc.state({state})"));
+    s.push("state", &[state]);
 }
 
 /// Just the diagram. Corner size and monitor mode change which rectangles are
 /// live, so it is refreshed from Rust rather than the page guessing.
 pub fn push_geometry(s: &Settings, cfg: &SharedConfig) {
     let (displays, hitboxes) = geometry_json(cfg);
-    s.eval(&format!(
-        "window.__hc.geometry({{displays:{displays},hitboxes:{hitboxes}}})"
-    ));
+    s.push(
+        "geometry",
+        &[serde_json::json!({"displays": displays, "hitboxes": hitboxes})],
+    );
 }
 
 /// A transient message in the page footer. `bad` colours it as an error.
 pub fn toast(s: &Settings, msg: &str, bad: bool) {
-    s.eval(&format!("window.__hc.toast({}, {bad})", json(msg)));
+    s.push("toast", &[msg.into(), bad.into()]);
 }
 
 /// Reflect the real state of the run-at-login registry entry, with an optional
 /// explanation of why it is not what was asked for.
 pub fn push_autostart(s: &Settings, on: bool, err: Option<&str>) {
     match err {
-        None => s.eval(&format!("window.__hc.autostart({on})")),
-        Some(e) => s.eval(&format!("window.__hc.autostart({on}, {})", json(e))),
+        None => s.push("autostart", &[on.into()]),
+        Some(e) => s.push("autostart", &[on.into(), e.into()]),
     }
 }
 
@@ -103,6 +194,13 @@ fn geometry_json(cfg: &SharedConfig) -> (serde_json::Value, serde_json::Value) {
         .lock()
         .map(|c| (c.monitor_mode, c.corner_size))
         .unwrap_or((MonitorMode::OuterCorners, 8));
+    // The Dock's corners are the outer corners of the whole arrangement,
+    // whatever Cantos's own setting says.
+    #[cfg(target_os = "macos")]
+    let mode = {
+        let _ = mode;
+        MonitorMode::OuterCorners
+    };
     let monitors = geometry::monitors();
     let boxes = geometry::hitboxes(&monitors, mode, size);
     (
@@ -111,7 +209,23 @@ fn geometry_json(cfg: &SharedConfig) -> (serde_json::Value, serde_json::Value) {
     )
 }
 
-/// JSON-encode a string for embedding in a JavaScript expression.
-fn json(s: &str) -> String {
-    serde_json::to_string(s).unwrap_or_else(|_| "\"\"".into())
+#[cfg(all(test, target_os = "macos"))]
+mod tests {
+    use super::Msg;
+    use crate::config::{Action, Modifier};
+
+    /// The exact shape `save()` in index.html sends on a Mac.
+    #[test]
+    fn the_pages_native_message_parses() {
+        let body = r#"{"cmd":"native","corners":[
+            {"action":{"kind":"lockWorkstation"},"modifier":"none"},
+            {"action":{"kind":"taskView"},"modifier":"none"},
+            {"action":{"kind":"none"},"modifier":"none"},
+            {"action":{"kind":"quickNote"},"modifier":"shift"}]}"#;
+        let Some(Msg::Native { corners }) = Msg::parse(body) else {
+            panic!("did not parse as Msg::Native");
+        };
+        assert_eq!(corners[1].action, Action::TaskView);
+        assert_eq!(corners[3].modifier, Modifier::Shift);
+    }
 }

@@ -2,7 +2,7 @@
 //!
 //! This is the part that decides whether the app feels solid or twitchy, so it
 //! lives on its own and does nothing else. It holds no Win32 handles, touches
-//! no config mutex, and runs no actions — it is fed a hot spot and the current
+//! no config mutex, and runs no actions. It is fed a hot spot and the current
 //! settings once per tick and answers "fire this corner" or "not yet".
 //!
 //! # The rules
@@ -10,7 +10,7 @@
 //! * **Dwell.** Resting in a corner for `dwell_ms` arms it. Without this,
 //!   overshooting toward a window's Close button fires the corner every time.
 //! * **Cooldown *and* leaving.** After firing, a spot stays disarmed until
-//!   both the cooldown elapses and the cursor leaves. Both, not either —
+//!   both the cooldown elapses and the cursor leaves. Both, not either:
 //!   otherwise parking the mouse would repeat the action.
 //! * **Vetoes.** A completed dwell can still be refused; see [`Veto`] for the
 //!   two very different ways that plays out.
@@ -35,8 +35,14 @@ pub struct Tunables {
     pub dwell: Duration,
     pub cooldown: Duration,
     pub modifier: Modifier,
+    /// A key per corner, overriding `modifier` where set. The Mac window
+    /// sets them, as System Settings does for the Dock's corners.
+    pub corner_keys: [Modifier; 4],
     pub suppress_fullscreen: bool,
     pub suppress_dragging: bool,
+    /// Whether any corner has something to do. When none has, the watcher
+    /// can stop asking where the cursor is.
+    pub any_assigned: bool,
 }
 
 impl Tunables {
@@ -48,8 +54,18 @@ impl Tunables {
             dwell: Duration::from_millis(cfg.dwell_ms as u64),
             cooldown: Duration::from_millis(cfg.cooldown_ms as u64),
             modifier: cfg.modifier,
+            corner_keys: cfg.corner_keys,
             suppress_fullscreen: cfg.suppress_fullscreen,
             suppress_dragging: cfg.suppress_while_dragging,
+            any_assigned: cfg.corners.iter().any(|a| !a.is_none()),
+        }
+    }
+
+    /// The key that has to be held for `corner`.
+    pub fn key_for(&self, corner: Corner) -> Modifier {
+        match self.corner_keys[corner.index()] {
+            Modifier::None => self.modifier,
+            own => own,
         }
     }
 }
@@ -69,7 +85,7 @@ enum State {
     /// Cursor is resting in a spot, waiting out the dwell.
     Dwelling { spot: Spot, since: Instant },
     /// A spot fired, or was vetoed. Stays disarmed until the cursor leaves
-    /// *and* the cooldown elapses — both, not either.
+    /// *and* the cooldown elapses: both, not either.
     Fired { spot: Spot, at: Instant },
 }
 
@@ -82,7 +98,7 @@ enum Veto {
     /// already parked in the corner is meant to fire it.
     Waiting,
     /// The desktop says no. **Disarm**, so the corner cannot go off the
-    /// instant the condition clears — see the note on each reason below.
+    /// instant the condition clears; see the note on each reason below.
     Blocked(&'static str),
 }
 
@@ -142,11 +158,11 @@ fn advance(
             let corner = spot.corner;
             let disarm = (State::Fired { spot, at: now }, Tick::Nothing);
 
-            match veto(tun, desktop) {
+            match veto(tun.key_for(corner), tun, desktop) {
                 Some(Veto::Waiting) => {
                     ldebug!(
                         "{corner:?} dwell met but {:?} not held; staying armed",
-                        tun.modifier
+                        tun.key_for(corner)
                     );
                     stay
                 }
@@ -176,8 +192,8 @@ fn advance(
     }
 }
 
-fn veto(tun: &Tunables, desktop: &impl Desktop) -> Option<Veto> {
-    if !desktop.modifier_held(tun.modifier) {
+fn veto(key: Modifier, tun: &Tunables, desktop: &impl Desktop) -> Option<Veto> {
+    if !desktop.modifier_held(key) {
         return Some(Veto::Waiting);
     }
     // Dragging a window into a corner is how Windows Snap works, so a corner
@@ -239,8 +255,10 @@ mod tests {
             dwell: Duration::from_millis(250),
             cooldown: Duration::from_millis(700),
             modifier: Modifier::None,
+            corner_keys: [Modifier::None; 4],
             suppress_fullscreen: false,
             suppress_dragging: false,
+            any_assigned: true,
         }
     }
 
@@ -455,6 +473,21 @@ mod tests {
         t.modifier = Modifier::Ctrl;
         let (_, tick) = satisfied_dwell(&t, Fake::clear());
         assert_eq!(tick, Tick::Fire(Corner::TopLeft));
+    }
+
+    #[test]
+    fn a_corners_own_key_overrides_the_shared_one() {
+        let mut t = tun();
+        t.corner_keys[Corner::TopLeft.index()] = Modifier::Win;
+        assert_eq!(t.key_for(Corner::TopLeft), Modifier::Win);
+        assert_eq!(t.key_for(Corner::TopRight), Modifier::None);
+        let not_held = Fake {
+            modifier_held: false,
+            ..Default::default()
+        };
+        let (state, tick) = satisfied_dwell(&t, not_held);
+        assert!(matches!(state, State::Dwelling { .. }));
+        assert_eq!(tick, Tick::Nothing);
     }
 
     #[test]

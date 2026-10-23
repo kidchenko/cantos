@@ -1,43 +1,96 @@
 // No console window: this is a tray app, and a flashing conhost on login
-// would be the first thing every user complained about.
-#![windows_subsystem = "windows"]
+// would be the first thing every user complained about. No-op off Windows.
+#![cfg_attr(windows, windows_subsystem = "windows")]
 
 //! Startup and wiring. The work happens elsewhere:
 //!
 //! | module      | responsibility                                      |
 //! |-------------|-----------------------------------------------------|
 //! | `watcher`   | polls the cursor on its own thread                  |
-//! | `trigger`   | decides when a corner fires — the rules             |
-//! | `desktop`   | asks Win32 what is happening right now              |
+//! | `trigger`   | decides when a corner fires: the rules              |
+//! | `desktop`   | asks the OS what is happening right now             |
+//! | `native`    | macOS: the Dock's own hot corners, read and written |
 //! | `geometry`  | monitors, and the hitboxes derived from them        |
 //! | `actions`   | what a corner does once it fires                    |
 //! | `app`       | the tray icon, its menu, and the settings window    |
 //! | `ui`        | the settings window and its page protocol           |
+//!
+//! Platform code sits behind a `mod imp` per module, one for each of Windows,
+//! macOS and Linux, plus platform-only modules: `elevation`, `shell` and
+//! `theme` (Windows), `cg`, `icon` and `native` (macOS), `x11` (Linux).
+//!
+//! macOS is the odd one out. It has hot corners of its own, in the Dock, so
+//! there Cantos is mostly a front end for those (`native`). Its own detector
+//! only handles corners given a Cantos action, one the Dock cannot do.
 
 mod actions;
 mod app;
 mod autostart;
 mod config;
-mod desktop;
-mod elevation;
 mod geometry;
 mod log;
-mod shell;
 mod single_instance;
-mod theme;
-mod trigger;
 mod ui;
 mod util;
+
+mod desktop;
+mod trigger;
 mod watcher;
+
+#[cfg(windows)]
+mod elevation;
+#[cfg(windows)]
+mod shell;
+#[cfg(windows)]
+mod theme;
+
+#[cfg(target_os = "macos")]
+mod cg;
+#[cfg(target_os = "macos")]
+mod icon;
+#[cfg(target_os = "macos")]
+mod native;
+
+#[cfg(target_os = "linux")]
+mod x11;
 
 use app::{App, Flow, UserEvent};
 use config::Config;
 use log::{lerror, linfo, lwarn};
 use std::sync::{Arc, Mutex};
+use tao::event::{Event, StartCause};
 use tao::event_loop::{ControlFlow, EventLoopBuilder};
 
 fn main() {
     log::init();
+
+    // The native settings window is this same binary, started by the tray
+    // as a child (see ui::child). It has no tray, no single-instance lock and
+    // no detector: just the window.
+    #[cfg(target_os = "macos")]
+    if std::env::args().any(|a| a == ui::child::FLAG) {
+        let args: Vec<String> = std::env::args().collect();
+        if let Some(i) = args.iter().position(|a| a == "--preview") {
+            let out = args
+                .get(i + 1)
+                .map(String::as_str)
+                .unwrap_or("settings.png");
+            let dark = args.iter().any(|a| a == "dark");
+            if let Err(e) = ui::window_mac::preview(out, dark) {
+                eprintln!("preview failed: {e}");
+                std::process::exit(1);
+            }
+            return;
+        }
+        ui::window_mac::run();
+        return;
+    }
+    #[cfg(target_os = "linux")]
+    if std::env::args().any(|a| a == ui::child::FLAG) {
+        ui::window_gtk::run();
+        return;
+    }
+
     log_startup();
 
     // If we are the second launch, the first has been told to show its
@@ -47,20 +100,39 @@ fn main() {
         return;
     };
 
-    let cfg: watcher::SharedConfig = Arc::new(Mutex::new(Config::load()));
-    let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
+    let cfg: config::SharedConfig = Arc::new(Mutex::new(Config::load()));
+    #[allow(unused_mut)]
+    let mut event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
+    // Menu-bar agent, no Dock icon. tao resets the activation policy as it
+    // starts, overriding LSUIElement, so it has to be asked for here too.
+    #[cfg(target_os = "macos")]
+    {
+        use tao::platform::macos::{ActivationPolicy, EventLoopExtMacOS};
+        event_loop.set_activation_policy(ActivationPolicy::Accessory);
+        event_loop.set_activate_ignoring_other_apps(false);
+    }
     let proxy = event_loop.create_proxy();
 
     // Held for the life of the process; dropping it stops the polling thread.
     // It also owns config-file change detection, so an edit made in an editor
     // reaches the tray and an open settings window rather than sitting there
-    // until the next restart — or being overwritten by our next save.
+    // until the next restart, or being overwritten by our next save.
     let _watcher = {
         let proxy = proxy.clone();
         watcher::Watcher::start(cfg.clone(), move || {
             let _ = proxy.send_event(UserEvent::ConfigReloaded);
         })
     };
+    // On a Mac the Dock fires its own corners. Its settings are watched too,
+    // so a change made in System Settings reaches an open window.
+    #[cfg(target_os = "macos")]
+    {
+        linfo!("hot corners: {:?}", native::read());
+        let proxy = proxy.clone();
+        native::watch(move || {
+            let _ = proxy.send_event(UserEvent::ConfigReloaded);
+        });
+    }
 
     // Launching the app again is how a user asks for the settings window.
     let signal_proxy = proxy.clone();
@@ -68,29 +140,60 @@ fn main() {
         let _ = signal_proxy.send_event(UserEvent::OpenSettings);
     });
 
-    let mut app = match App::new(cfg, proxy.clone()) {
-        Ok(app) => app,
-        Err(e) => {
-            lerror!("{e}");
-            return;
-        }
-    };
-    linfo!("tray icon created; watcher running");
-
     // `--settings` opens the window straight away. The installer uses it for
     // its "launch now" checkbox, so a first run lands somewhere useful rather
-    // than looking like nothing happened.
-    if std::env::args().any(|a| a == "--settings") {
-        let _ = proxy.send_event(UserEvent::OpenSettings);
-    }
+    // than looking like nothing happened. Acted on once the app exists rather
+    // than sent as an event now: GTK delivers events queued before the loop
+    // starts ahead of `Init`, when there is no app yet to receive them.
+    let open_settings = std::env::args().any(|a| a == "--settings");
+
+    // The tray is built once the loop is running: on macOS the status item
+    // cannot be created before the application has finished launching.
+    let mut app: Option<App> = None;
 
     event_loop.run(move |event, target, control_flow| {
         // Tray apps idle; nothing here needs a continuous redraw.
         *control_flow = ControlFlow::Wait;
-        if app.handle(event, target) == Flow::Exit {
-            *control_flow = ControlFlow::Exit;
+
+        if let Event::NewEvents(StartCause::Init) = event {
+            #[cfg(target_os = "macos")]
+            drop_launch_activation();
+            match App::new(cfg.clone(), proxy.clone()) {
+                Ok(mut a) => {
+                    linfo!("tray icon created");
+                    if open_settings {
+                        a.handle(Event::UserEvent(UserEvent::OpenSettings), target);
+                    }
+                    app = Some(a);
+                }
+                Err(e) => {
+                    lerror!("{e}");
+                    *control_flow = ControlFlow::Exit;
+                }
+            }
+            return;
+        }
+
+        if let Some(a) = app.as_mut() {
+            if a.handle(event, target) == Flow::Exit {
+                app = None;
+                *control_flow = ControlFlow::Exit;
+            }
         }
     });
+}
+
+/// tao asks macOS to activate the app as it finishes launching. A menu bar
+/// app has nothing to bring forward, and on macOS 26 the request stays
+/// pending until the first click on the menu bar icon, then completes while
+/// the menu is open and closes it. Withdraw it before anything is shown.
+#[cfg(target_os = "macos")]
+fn drop_launch_activation() {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::NSApplication;
+    if let Some(mtm) = MainThreadMarker::new() {
+        NSApplication::sharedApplication(mtm).deactivate();
+    }
 }
 
 /// The header every log file opens with. Worth the four lines: "which build,
@@ -109,17 +212,24 @@ fn log_startup() {
             .unwrap_or_else(|_| "<unknown>".into())
     );
     linfo!("args: {:?}", std::env::args().skip(1).collect::<Vec<_>>());
+    linfo!("os: {} {}", std::env::consts::OS, std::env::consts::ARCH);
+    // Each platform's answer to "why would an action silently do nothing?".
+    #[cfg(windows)]
     linfo!(
         "integrity: {}",
         elevation::own_level()
             .map(elevation::describe)
             .unwrap_or("unknown")
     );
+    #[cfg(target_os = "linux")]
+    if let Some(why) = x11::session_warning() {
+        lwarn!("{why}");
+    }
     // Recorded at every start, because "Settings does nothing" is otherwise
-    // indistinguishable from a dozen other faults — and this is the answer
-    // most of the time.
+    // indistinguishable from a dozen other faults, and on Windows this is
+    // the answer most of the time.
     match ui::runtime_version() {
-        Some(v) => linfo!("webview2: {v}"),
-        None => lwarn!("webview2: NOT INSTALLED — the settings window cannot open"),
+        Some(v) => linfo!("webview: {v}"),
+        None => lwarn!("webview: NOT INSTALLED, the settings window cannot open"),
     }
 }

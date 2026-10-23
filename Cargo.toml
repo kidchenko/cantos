@@ -3,7 +3,7 @@ name         = "cantos"
 version      = "0.0.2"
 edition      = "2021"
 rust-version = "1.77"
-description  = "macOS-style hot corners for Windows"
+description  = "Hot corners for Windows, macOS and Linux"
 authors      = ["kidchenko <kidchenko@gmail.com>"]
 license      = "MIT"
 repository   = "https://github.com/kidchenko/windows-cantos"
@@ -20,7 +20,10 @@ tao = "0.37"
 tray-icon = "0.24"
 wry = "0.57"
 
-[dependencies.windows]
+# ---------------------------------------------------------------------------
+# Windows
+# ---------------------------------------------------------------------------
+[target.'cfg(windows)'.dependencies.windows]
 version  = "0.62"
 features = [
     "Win32_Foundation",
@@ -39,8 +42,42 @@ features = [
     "Win32_UI_WindowsAndMessaging",
 ]
 
-[build-dependencies]
+# The build script's cfg matches the host: resource embedding only happens when
+# building on Windows, which is where the Windows release is built anyway.
+[target.'cfg(windows)'.build-dependencies]
 winresource = "0.1"
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# On a Mac the Dock detects the corners and Cantos edits its settings
+# (native.rs), so there is no cursor polling here. The few CoreGraphics and
+# CoreFoundation functions used (displays for the diagram, the Dock's
+# preferences) are declared by hand. `libc` is for localtime_r in the log
+# stamp and dlopen of the private Dock and lock-screen entry points behind the
+# Test button (actions.rs). objc2 is already in the tree via tao and
+# tray-icon; AppKit for the activation policy and the Edit menu, Foundation
+# for the preference values, ServiceManagement for run-at-login.
+[target.'cfg(target_os = "macos")'.dependencies]
+libc                     = "0.2"
+objc2                    = "0.6"
+# The native settings window (ui/window_mac.rs) is most of the AppKit list.
+dispatch2                = "0.3"
+objc2-app-kit            = { version = "0.3", default-features = false, features = ["std", "objc2-core-foundation", "NSAccessibility", "NSAccessibilityConstants", "NSAccessibilityProtocols", "NSAppearance", "NSAttributedString", "NSParagraphStyle", "NSApplication", "NSBezierPath", "NSBitmapImageRep", "NSButton", "NSButtonCell", "NSCell", "NSColor", "NSControl", "NSEvent", "NSFont", "NSFontDescriptor", "NSGraphics", "NSGraphicsContext", "NSImage", "NSImageRep", "NSImageView", "NSMenu", "NSMenuItem", "NSPopUpButton", "NSResponder", "NSRunningApplication", "NSSwitch", "NSText", "NSTextField", "NSTrackingArea", "NSView", "NSVisualEffectView", "NSWindow"] }
+objc2-foundation         = { version = "0.3", default-features = false, features = ["std", "objc2-core-foundation", "NSArray", "NSData", "NSDictionary", "NSError", "NSGeometry", "NSNotification", "NSObject", "NSString", "NSValue"] }
+objc2-service-management = { version = "0.3", default-features = false, features = ["std", "SMAppService", "objc2", "objc2-foundation"] }
+
+# ---------------------------------------------------------------------------
+# Linux
+# ---------------------------------------------------------------------------
+# X11 only, and loaded at runtime rather than linked: `x11-dl` is already in the
+# tree via tao, and dlopen means the binary still starts on a machine without
+# libXtst or libXrandr and says so in the log. See desktop.rs on Wayland.
+[target.'cfg(target_os = "linux")'.dependencies]
+# The settings window (ui/window_gtk.rs). Already in the tree for the tray.
+gtk    = "0.18"
+libc   = "0.2"
+x11-dl = "2.21"
 
 # Size is a first-class goal: this profile is what keeps the shipped
 # binary in the ~3-4 MB range rather than ~12 MB.

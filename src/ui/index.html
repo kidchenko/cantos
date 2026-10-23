@@ -82,7 +82,7 @@
   .screen-body { stroke: var(--line); }
   .screen-body.secondary { fill: color-mix(in srgb, var(--text) 6%, var(--raised)); }
   .screen-body.primary { fill: color-mix(in srgb, var(--accent) 14%, var(--raised)); }
-  /* A hint of the Windows 11 taskbar, so a lone display reads as a screen
+  /* A hint of the taskbar (or the Mac menu bar), so a lone display reads as a screen
      rather than an empty rectangle. */
   .taskbar { fill: var(--faint); opacity: .5; }
   .screen-tag {
@@ -140,6 +140,9 @@
   .card.on .name { color: var(--dim); }
   .card .row2 { display: flex; align-items: center; gap: 8px; }
   .card .glyph { width: 16px; height: 16px; flex: none; stroke: var(--faint); stroke-width: 1.5; fill: none; }
+  /* macOS: the key to hold, per corner, as System Settings has it. */
+  .card select[data-c] { flex: 1 1 0; }
+  .card select.mod { flex: 0 0 104px; width: 104px; }
   .card.on .glyph { stroke: var(--accent); }
 
   .mini {
@@ -256,7 +259,7 @@
       <h1>Cantos</h1>
       <div class="sub">Throw the cursor into a corner to trigger an action</div>
     </div>
-    <label class="switch" title="Enable hot corners">
+    <label class="switch" title="Enable hot corners" data-own>
       <input type="checkbox" id="enabled"><span class="track"></span><span class="thumb"></span>
     </label>
   </header>
@@ -275,9 +278,9 @@
 
   <div class="corners" id="corners"></div>
 
-  <section class="panel" id="custom" hidden><h2>Custom commands</h2></section>
+  <section class="panel" id="custom" hidden data-own><h2>Custom commands</h2></section>
 
-  <section class="panel">
+  <section class="panel" data-own>
     <h2>Trigger</h2>
     <div class="row">
       <div class="info">
@@ -312,20 +315,15 @@
         <div class="hint">Require a modifier, so corners never fire by accident</div>
       </div>
       <div class="ctl">
-        <select id="modifier">
-          <option value="none">Not required</option>
-          <option value="ctrl">Ctrl</option>
-          <option value="alt">Alt</option>
-          <option value="shift">Shift</option>
-          <option value="win">Windows</option>
-        </select>
+        <select id="modifier"></select>
       </div>
     </div>
   </section>
 
   <section class="panel">
-    <h2>Scope</h2>
-    <div class="row">
+    <h2 data-own>Scope</h2>
+    <h2 data-native hidden>General</h2>
+    <div class="row" data-own>
       <div class="info">
         <div class="nm">Active corners</div>
         <div class="hint" id="monHint">&nbsp;</div>
@@ -338,7 +336,7 @@
         </div>
       </div>
     </div>
-    <div class="row">
+    <div class="row" data-own>
       <div class="info">
         <div class="nm">Pause in fullscreen</div>
         <div class="hint">Never fire over a fullscreen game or video</div>
@@ -347,10 +345,10 @@
         <input type="checkbox" id="suppress"><span class="track"></span><span class="thumb"></span>
       </label></div>
     </div>
-    <div class="row">
+    <div class="row" data-own>
       <div class="info">
         <div class="nm">Pause while dragging</div>
-        <div class="hint">Snapping a window to a corner stays a snap</div>
+        <div class="hint" id="dragHint">Snapping a window to a corner stays a snap</div>
       </div>
       <div class="ctl"><label class="switch">
         <input type="checkbox" id="dragging"><span class="track"></span><span class="thumb"></span>
@@ -358,7 +356,7 @@
     </div>
     <div class="row">
       <div class="info">
-        <div class="nm">Start with Windows</div>
+        <div class="nm" id="autostartLabel">Start with Windows</div>
         <div class="hint">Launch automatically when you sign in</div>
       </div>
       <div class="ctl"><label class="switch">
@@ -373,7 +371,8 @@
     <span id="toast"></span>
     <button class="link" id="openLog">Log</button>
     <button class="link" id="openCfg">Config folder</button>
-    <button class="link" id="reset">Reset</button>
+    <button class="link" id="reset" data-own>Reset</button>
+    <button class="link" id="tryNative" hidden>Try New Window</button>
   </footer>
 </div>
 
@@ -383,39 +382,11 @@
 const SVGNS = "http://www.w3.org/2000/svg";
 const CORNERS = ["Top left", "Top right", "Bottom left", "Bottom right"];
 const KEYS    = ["topLeft", "topRight", "bottomLeft", "bottomRight"];
-// Grouped so a list this long stays scannable in the native dropdown.
-const ACTION_GROUPS = [
-  [null, [["none", "Nothing"]]],
-  ["Windows & desktops", [
-    ["taskView",     "Task View"],
-    ["showDesktop",  "Show desktop"],
-    ["minimizeAll",  "Minimize all"],
-    ["desktopLeft",  "Previous desktop"],
-    ["desktopRight", "Next desktop"],
-  ]],
-  ["Shell", [
-    ["startMenu",     "Start menu"],
-    ["search",        "Search"],
-    ["settings",      "Settings"],
-    ["quickSettings", "Quick Settings"],
-    ["notifications", "Notifications"],
-    ["quickLink",     "Quick Link menu"],
-    ["runDialog",     "Run\u2026"],
-  ]],
-  ["Tools", [
-    ["fileExplorer",   "File Explorer"],
-    ["screenshot",     "Screenshot"],
-    ["clipboard",      "Clipboard history"],
-    ["emoji",          "Emoji picker"],
-    ["projectDisplay", "Project / second screen"],
-  ]],
-  ["Power & screen", [
-    ["lockWorkstation", "Lock"],
-    ["screensaver",     "Screensaver"],
-    ["displayOff",      "Turn display off"],
-  ]],
-  [null, [["custom", "Custom command"]]],
-];
+// What this platform offers, from Rust (src/ui/page.rs, platform_script), so
+// the page never lists an action the OS underneath cannot run. Grouped so a
+// list this long stays scannable in the native dropdown.
+const PLATFORM = window.__platform;
+const ACTION_GROUPS = PLATFORM.actions;
 
 const OPTIONS_HTML = ACTION_GROUPS.map(([group, items]) => {
   const opts = items.map(([v, l]) => '<option value="' + v + '">' + l + "</option>").join("");
@@ -426,6 +397,10 @@ const OPTIONS_HTML = ACTION_GROUPS.map(([group, items]) => {
 const GLYPH = {
   none:            "M3 8h10",
   taskView:        "M2 3h5v4H2zM9 3h5v4H9zM2 9h5v4H2zM9 9h5v4H9z",
+  appWindows:      "M2.5 4h7v5h-7zM6.5 7h7v5h-7z",
+  quickNote:       "M3.5 2.5h9v11h-9zM5.5 5.5h5M5.5 8h5M5.5 10.5h3",
+  disableScreenSaver: "M13 9.5A5.5 5.5 0 0 1 6.5 3 5.5 5.5 0 1 0 13 9.5zM2.5 2.5l11 11",
+  launchpad:       "M3 3h2v2H3zM7 3h2v2H7zM11 3h2v2h-2zM3 7h2v2H3zM7 7h2v2H7zM11 7h2v2h-2zM3 11h2v2H3zM7 11h2v2H7zM11 11h2v2h-2z",
   showDesktop:     "M2 3h12v7H2zM6 13h4M8 10v3",
   minimizeAll:     "M3 13h10M8 2.5v6M5.6 6.4L8 8.8l2.4-2.4",
   desktopLeft:     "M9.6 3.4L5.2 8l4.4 4.6M13 3.4v9.2",
@@ -463,7 +438,22 @@ const el = (n, a) => {
   return e;
 };
 
+// Platform names for the keys and the login setting.
+$("modifier").innerHTML = '<option value="none">Not required</option>' +
+  PLATFORM.modifiers.map(([v, l]) => '<option value="' + v + '">' + l + "</option>").join("");
+$("autostartLabel").textContent = PLATFORM.autostartLabel;
+$("dragHint").textContent = PLATFORM.dragHint;
+
 let cfg = null, displays = [], hitboxes = [], booting = true, hovered = null;
+
+// macOS: Cantos edits the Dock's own hot corners there (src/native.rs), so the
+// settings only Cantos's detector has are hidden, and each corner gets the
+// key-to-hold that System Settings gives it. `nativeMods` is that per corner.
+let nativeMods = ["none", "none", "none", "none"];
+const NATIVE_MODS = [["none", "No key"], ["shift", "\u21E7 Shift"], ["ctrl", "\u2303 Control"],
+                     ["alt", "\u2325 Option"], ["win", "\u2318 Command"]];
+for (const e of document.querySelectorAll("[data-own]")) if (PLATFORM.native) e.hidden = true;
+for (const e of document.querySelectorAll("[data-native]")) e.hidden = !PLATFORM.native;
 
 /* ------------------------------------------------------------ corner cards */
 const cornersEl = $("corners");
@@ -482,11 +472,18 @@ for (let i = 0; i < 4; i++) {
       '<select data-c="' + i + '" aria-label="' + CORNERS[i] + ' action">' +
         OPTIONS_HTML +
       "</select>" +
+      (PLATFORM.native
+        ? '<select class="mod" data-m="' + i + '" aria-label="' + CORNERS[i] + ' key to hold">' +
+            NATIVE_MODS.map(([v, l]) => '<option value="' + v + '">' + l + "</option>").join("") +
+          "</select>"
+        : "") +
     "</div>";
   cornersEl.appendChild(card);
 }
 
 cornersEl.addEventListener("change", (e) => {
+  const mod = e.target.closest("select[data-m]");
+  if (mod) { nativeMods[+mod.dataset.m] = mod.value; save(); return; }
   const sel = e.target.closest("select[data-c]");
   if (!sel) return;
   const i = +sel.dataset.c, kind = sel.value, prev = cfg.corners[i];
@@ -554,7 +551,13 @@ function drawDiagram() {
       rx: px(8), "stroke-width": px(1.25),
       class: "screen-body " + (d.primary ? "primary" : "secondary"),
     }));
-    if (d.primary) {
+    if (d.primary && PLATFORM.os === "macos") {
+      // The menu bar lives on the main display, full width along the top.
+      svg.appendChild(el("rect", {
+        x: d.left + px(8), y: d.top + px(1.5), width: d.right - d.left - px(16),
+        height: px(4), class: "taskbar",
+      }));
+    } else if (d.primary) {
       const bw = (d.right - d.left) * 0.22, bh = px(4);
       svg.appendChild(el("rect", {
         x: (d.left + d.right) / 2 - bw / 2, y: d.bottom - px(14),
@@ -606,6 +609,10 @@ function paintHighlight() {
 window.__hc = {
   state(s) {
     cfg = s.config;
+    if (s.native) {
+      nativeMods = s.native.map(c => c.modifier);
+      cfg.enabled = true; // no pause on a Mac; the Dock decides
+    }
     displays = s.displays || [];
     hitboxes = s.hitboxes || [];
     render(); drawDiagram();
@@ -646,7 +653,11 @@ function statusText() {
   if (!cfg) return "";
   if (!cfg.enabled) return "Hot corners are paused";
   const assigned = cfg.corners.filter(c => c.kind !== "none").length;
-  if (!assigned) return "No corners assigned yet — try a preset";
+  if (!assigned) return "No corners assigned yet. Try a preset";
+  if (PLATFORM.native) {
+    return assigned + (assigned === 1 ? " corner" : " corners") +
+           " assigned. These are macOS's own hot corners; a change restarts the Dock";
+  }
   const spots = hitboxes.length;
   const dwell = cfg.dwellMs === 0 ? "fires instantly" : "after " + cfg.dwellMs + " ms";
   return assigned + (assigned === 1 ? " corner" : " corners") + " assigned, " +
@@ -689,8 +700,8 @@ $("monMode").addEventListener("click", (e) => {
   render(); save();
 });
 
-// Autostart writes to the registry, so it round-trips through Rust rather
-// than riding along with the config save.
+// Autostart lives with the OS (Run key, Login Items, XDG autostart), so it
+// round-trips through Rust rather than riding along with the config save.
 $("autostart").addEventListener("change", () => send({ cmd: "autostart", value: $("autostart").checked }));
 
 for (const b of document.querySelectorAll("[data-preset]")) {
@@ -703,6 +714,9 @@ for (const b of document.querySelectorAll("[data-preset]")) {
 $("openLog").addEventListener("click", () => send({ cmd: "openLog" }));
 $("openCfg").addEventListener("click", () => send({ cmd: "openConfigDir" }));
 $("reset").addEventListener("click", () => send({ cmd: "reset" }));
+// The native window is replacing this page, platform by platform.
+$("tryNative").hidden = !PLATFORM.nativeUi;
+$("tryNative").addEventListener("click", () => send({ cmd: "settingsUi", native: true }));
 
 $("custom").addEventListener("input", (e) => {
   const f = e.target.closest("[data-field]");
@@ -730,7 +744,10 @@ function render() {
     card.querySelector("select").value = kind;
     card.classList.toggle("on", kind !== "none");
     card.querySelector(".glyph path").setAttribute("d", GLYPH[kind] || "");
-    card.querySelector("[data-test]").disabled = kind === "none";
+    card.querySelector("[data-test]").disabled =
+      kind === "none" || PLATFORM.untestable.includes(kind);
+    const mod = card.querySelector("select[data-m]");
+    if (mod) { mod.value = nativeMods[i]; mod.disabled = kind === "none"; }
   }
 
   for (const [id, , key, fmt] of sliders) {
@@ -788,6 +805,12 @@ function renderCustom() {
 let timer = null;
 function save() {
   if (booting) return;
+  // The Dock is restarted on every write, so this goes at once, whole, and
+  // only from deliberate picks: there are no sliders on a Mac.
+  if (PLATFORM.native) {
+    send({ cmd: "native", corners: cfg.corners.map((c, i) => ({ action: c, modifier: nativeMods[i] })) });
+    return;
+  }
   // Dragging a slider emits an event per pixel; each one would otherwise be a
   // lock, a serialise, and a disk write.
   clearTimeout(timer);

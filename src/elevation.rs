@@ -4,7 +4,7 @@
 //! process at a higher integrity level than the sender. "Silently" is the
 //! problem: `SendInput` returns success and reports every event as inserted,
 //! so there is no error to check. Corner detection works, the action runs,
-//! and nothing happens — which is indistinguishable from a broken app.
+//! and nothing happens, which is indistinguishable from a broken app.
 //!
 //! So we ask the question directly instead: is the foreground window owned by
 //! something that outranks us? That turns an invisible failure into a log
@@ -51,8 +51,8 @@ fn level_of(process: HANDLE) -> Option<u32> {
         }
 
         // Backed by `u64` rather than `u8`: TOKEN_MANDATORY_LABEL holds a SID
-        // pointer, so reading one out of a byte vector — which is only
-        // byte-aligned — is undefined behaviour even where it happens to work.
+        // pointer, so reading one out of a byte vector (which is only
+        // byte-aligned) is undefined behaviour even where it happens to work.
         let mut buf = vec![0u64; needed.div_ceil(8) as usize];
         let ok = GetTokenInformation(
             token,

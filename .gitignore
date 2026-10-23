@@ -11,3 +11,6 @@ tests/*fired.txt
 # Raw screen recordings: may contain whatever was on the desktop.
 docs/frames/
 
+
+# macOS Finder metadata
+.DS_Store

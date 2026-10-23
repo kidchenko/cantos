@@ -1,50 +1,49 @@
 //! The polling thread: samples the cursor, feeds [`crate::trigger`], and runs
 //! whatever it says to run.
 //!
-//! The decision logic lives in `trigger`; the Win32 questions live in
-//! `desktop`. What is left here is the loop and its three timers.
+//! The decision logic lives in `trigger`; the OS questions live in `desktop`.
+//! What is left here is the loop and its three timers.
 //!
 //! # Why polling rather than a mouse hook
 //!
-//! The obvious alternative is a `WH_MOUSE_LL` low-level hook. We deliberately
-//! do not use one:
+//! The obvious alternative on Windows is a `WH_MOUSE_LL` low-level hook. We
+//! deliberately do not use one:
 //!
 //!   * A low-level hook runs *inline* on the input thread for every mouse
 //!     move system-wide. Any latency we add is latency the whole desktop
 //!     feels, and if our callback overruns `LowLevelHooksTimeout` Windows
-//!     silently unhooks us — the app appears to just stop working.
+//!     silently unhooks us, and the app appears to just stop working.
 //!   * Hooks need a pumped message loop on the installing thread, coupling
 //!     detection to UI responsiveness.
 //!
 //! `GetCursorPos` at ~33 Hz costs a few hundred nanoseconds per tick, is
 //! immune to both problems, and a hot corner does not need sub-30 ms
 //! resolution when it is gated behind a 250 ms dwell anyway.
+//!
+//! The same holds elsewhere. On macOS an event tap would need the Input
+//! Monitoring permission just to see the pointer move, where reading its
+//! position needs none; on X11, `XQueryPointer` is one round trip.
 
 use crate::actions;
-use crate::config::{Action, Config, MonitorMode};
-use crate::desktop::{self, Windows};
+use crate::config::{Action, Config, MonitorMode, SharedConfig};
+use crate::desktop::{self, System};
 use crate::geometry::{self, contains, Hitbox};
 use crate::log::linfo;
 use crate::trigger::{Tick, Trigger, Tunables};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
-
-use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED};
 
 const POLL_INTERVAL: Duration = Duration::from_millis(30);
 
 /// How often to re-enumerate displays. Cheap enough to do on a timer rather
-/// than plumbing `WM_DISPLAYCHANGE` through to this thread, and it picks up
-/// resolution and DPI changes for free.
+/// than plumbing display-change notifications through to this thread, and it
+/// picks up resolution and DPI changes for free.
 const LAYOUT_REFRESH: Duration = Duration::from_secs(1);
 
 /// How often to stat `config.json`. Only a `metadata` call unless the
 /// timestamp actually moved, so the file is parsed on change, not on a timer.
 const CONFIG_POLL: Duration = Duration::from_secs(1);
-
-/// Config shared with the tray and the settings UI.
-pub type SharedConfig = Arc<Mutex<Config>>;
 
 /// Owns the polling thread. Dropping it stops the thread and joins it.
 pub struct Watcher {
@@ -85,11 +84,13 @@ impl Drop for Watcher {
 fn run<F: Fn()>(cfg: SharedConfig, running: Arc<AtomicBool>, on_external_change: F) {
     // SHQueryUserNotificationState is a shell call; give the thread an STA so
     // it is always invoked from an initialised apartment.
+    #[cfg(windows)]
     unsafe {
+        use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED};
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
     }
 
-    let desktop = Windows;
+    let desktop = System;
     let mut trigger = Trigger::new();
     let mut layout = Layout::default();
     let mut config_file = ConfigFile::new();
@@ -106,7 +107,9 @@ fn run<F: Fn()>(cfg: SharedConfig, running: Arc<AtomicBool>, on_external_change:
             Tunables::read(&guard)
         };
 
-        if !tun.enabled {
+        // Paused, or nothing to do: no point asking where the cursor is. On a
+        // Mac this is the usual case, with every corner left to the Dock.
+        if !tun.enabled || !tun.any_assigned {
             trigger.reset();
             continue;
         }
@@ -127,7 +130,10 @@ fn run<F: Fn()>(cfg: SharedConfig, running: Arc<AtomicBool>, on_external_change:
         }
     }
 
-    unsafe { CoUninitialize() };
+    #[cfg(windows)]
+    unsafe {
+        windows::Win32::System::Com::CoUninitialize()
+    };
 }
 
 fn corner_action(cfg: &SharedConfig, corner: crate::config::Corner) -> Action {
@@ -174,7 +180,7 @@ impl Layout {
         &self.boxes
     }
 
-    /// `live corners` is the single most useful line in the log — it lists the
+    /// `live corners` is the single most useful line in the log: it lists the
     /// exact rectangles that are hot right now, which answers most "why
     /// didn't my corner fire" questions outright. Logged only when it changes,
     /// because this runs once a second.
@@ -224,7 +230,7 @@ impl ConfigFile {
     /// running config actually moved.
     ///
     /// The file is parsed only when its timestamp changes, and the result is
-    /// compared against what we already hold — so our own saves, which of
+    /// compared against what we already hold, so our own saves, which of
     /// course bump the timestamp, cost one parse and report no change. That is
     /// what keeps this from ping-ponging with the settings window.
     fn pick_up_external_edit(&mut self, cfg: &SharedConfig) -> bool {
