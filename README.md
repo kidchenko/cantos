@@ -218,7 +218,7 @@ Open a new terminal afterwards, or `cargo` won't be on PATH.
 .\build.ps1 -Test           # ...then run the full test suite (needs admin)
 ```
 
-Outputs `target\release\cantos.exe` and `dist\Cantos-Setup-0.1.0.exe`.
+Outputs `target\release\cantos.exe` and `dist\Cantos-Setup-0.0.3.exe`.
 
 If `cargo build` fails on `link.exe`, install the MSVC C++ workload:
 

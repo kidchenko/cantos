@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 
-$version  = '0.1.0'
+$version  = '0.0.3'
 $url      = "https://github.com/kidchenko/windows-cantos/releases/download/v$version/Cantos-Setup-$version.exe"
 
 $packageArgs = @{
