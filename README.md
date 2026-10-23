@@ -21,13 +21,11 @@ the menu bar) using about 2 MB and no measurable CPU.
 ### Windows
 
 ```powershell
-winget install kidchenko.Cantos
-# or
-choco install cantos
-# or
 scoop bucket add kidchenko https://github.com/kidchenko/scoop-bucket
 scoop install kidchenko/cantos
 ```
+
+winget and Chocolatey packages are on the way.
 
 Or download from [Releases](https://github.com/kidchenko/cantos/releases):
 `Cantos-Setup-<version>.exe` to install, or `cantos-<version>-x64.exe` to run
