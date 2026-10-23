@@ -8,6 +8,10 @@ Releases are tagged `vX.Y.Z`, which is what triggers the release workflow.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.1.0] - 2026-10-23
+
 ### Added
 
 - **macOS.** Cantos runs in the menu bar on macOS 11 and later, as one
@@ -117,6 +121,7 @@ rather than listing changes against a version nobody has.
   names the cause when it happens. See the README for the workarounds.
 - x64 only. Windows 10 or later.
 
-[Unreleased]: https://github.com/kidchenko/windows-cantos/compare/v0.0.2...HEAD
+[Unreleased]: https://github.com/kidchenko/windows-cantos/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/kidchenko/windows-cantos/compare/v0.0.2...v0.1.0
 [0.0.2]: https://github.com/kidchenko/windows-cantos/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/kidchenko/windows-cantos/releases/tag/v0.0.1

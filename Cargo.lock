@@ -88,7 +88,7 @@ dependencies = [
 
 [[package]]
 name = "cantos"
-version = "0.0.2"
+version = "0.1.0"
 dependencies = [
  "dispatch2",
  "gtk",

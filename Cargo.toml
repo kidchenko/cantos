@@ -1,6 +1,6 @@
 [package]
 name         = "cantos"
-version      = "0.0.2"
+version      = "0.1.0"
 edition      = "2021"
 rust-version = "1.77"
 description  = "Hot corners for Windows, macOS and Linux"

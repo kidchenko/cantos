@@ -5,7 +5,7 @@
 #define AppName    "Cantos"
 ; The release workflow passes /DAppVersion=x.y.z; this is the local default.
 #ifndef AppVersion
-  #define AppVersion "0.0.2"
+  #define AppVersion "0.1.0"
 #endif
 #define AppPublisher "kidchenko"
 #define AppURL     "https://github.com/kidchenko/windows-cantos"
@@ -17,7 +17,7 @@
 AppId={{7B1F4C2E-9A3D-4E58-B6C1-2F8A5D0E7341}
 AppName={#AppName}
 AppVersion={#AppVersion}
-; Without this Add/Remove Programs reads "Cantos version 0.0.2".
+; Without this Add/Remove Programs reads "Cantos version 0.1.0".
 AppVerName={#AppName} {#AppVersion}
 AppPublisher={#AppPublisher}
 AppPublisherURL={#AppURL}
