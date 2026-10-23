@@ -181,6 +181,15 @@ jobs:
           name: winget-manifests
           path: packaging/winget/*.yaml
 
+      # Everything the artifact carries lives in dist\, release notes included.
+      # Paths from two directories would make upload-artifact keep their
+      # common parent, nesting the exes under dist/ inside the artifact, and
+      # the publish job would then not find them (v0.0.3 shipped without
+      # its Windows files that way).
+      - name: Stage release notes with the artifacts
+        shell: pwsh
+        run: Copy-Item release-notes.md dist\release-notes.md -Force
+
       - uses: actions/upload-artifact@v4
         with:
           name: windows
@@ -188,7 +197,7 @@ jobs:
             dist/Cantos-Setup-*.exe
             dist/cantos-*-x64.exe
             dist/*.nupkg
-            release-notes.md
+            dist/release-notes.md
           if-no-files-found: error
 
       - name: Summary
@@ -279,6 +288,11 @@ jobs:
         # it always has, for anyone installing from a local Chocolatey source.
         run: |
           cd dist
+          # Every platform's files must be here; a release missing one is
+          # worse than no release.
+          for f in Cantos-Setup-*.exe cantos-*-x64.exe *.nupkg *.dmg *.tar.gz release-notes.md; do
+            [ -e "$f" ] || { echo "::error::missing from the release: $f"; ls -R; exit 1; }
+          done
           sha256sum Cantos-Setup-*.exe cantos-*-x64.exe *.nupkg *.dmg *.tar.gz | tee SHA256SUMS.txt
 
       - name: Publish release
