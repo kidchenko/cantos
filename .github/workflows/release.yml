@@ -309,6 +309,26 @@ jobs:
           body_path: dist/release-notes.md
           generate_release_notes: true
 
+  # Optional: only runs when the CHOCO_API_KEY secret is set. New packages go
+  # through community moderation, so the first push takes a while to appear.
+  chocolatey:
+    needs: publish
+    runs-on: windows-latest
+    env:
+      CHOCO_API_KEY: ${{ secrets.CHOCO_API_KEY }}
+    steps:
+      - uses: actions/download-artifact@v4
+        if: env.CHOCO_API_KEY != ''
+        with:
+          name: windows
+          path: dist
+      - name: Push to community.chocolatey.org
+        if: env.CHOCO_API_KEY != ''
+        shell: pwsh
+        run: |
+          $pkg = Get-ChildItem dist\*.nupkg | Select-Object -First 1
+          choco push $pkg.FullName --source https://push.chocolatey.org/ --api-key $env:CHOCO_API_KEY
+
   # Optional: only runs when the HOMEBREW_TAP_TOKEN secret is set (a token that
   # can run workflows on kidchenko/homebrew-tap), as for Cafe and Porta. The
   # tap needs a `cantos` cask before this can do anything.
