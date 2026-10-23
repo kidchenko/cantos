@@ -59,7 +59,7 @@ A dark rounded tile with one corner lit: the app's whole idea in one shape.
 The quarter-disc radius and the gradient radius are both `40` in the 64-unit
 viewBox, so the colour sweep ends exactly where the lit corner does.
 
-The settings page draws the same mark as inline SVG (`src/ui/index.html`,
-`svg.mark`) rather than loading this file, so that the window has no external
-asset to fetch. It is a deliberately simplified copy: flat `#6ea8fe` instead
-of the gradient. If you restyle the icon, that copy needs the same edit.
+The settings windows draw the same mark in code (`draw_mark` in
+`src/ui/window_*.rs`) rather than loading this file, so that they have no
+external asset to fetch. It is a deliberately simplified copy: flat `#6ea8fe` instead
+of the gradient. If you restyle the icon, those copies need the same edit.

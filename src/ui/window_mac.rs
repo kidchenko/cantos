@@ -7,7 +7,7 @@
 //! It is the web page's design, redrawn natively: the same colour tokens, type
 //! scale, spacing and components (the stage with its display diagram, pill
 //! chips, corner cards, the panel, the switch, the footer), measured off
-//! `index.html`. What native adds: the selects open real macOS menus with SF
+//! the original web page. What native adds: the selects open real macOS menus with SF
 //! Symbols, the card glyphs and the diagram's corners show each action's
 //! symbol, Tab and Space work everywhere with the page's focus ring, and
 //! every control has a VoiceOver role.
@@ -56,7 +56,7 @@ use objc2_foundation::{
 use serde::Deserialize;
 
 // ---------------------------------------------------------------------------
-// Tokens, from index.html's :root
+// Tokens, from the original web page's :root
 // ---------------------------------------------------------------------------
 
 #[derive(Clone, Copy)]
@@ -139,7 +139,7 @@ fn mix(a: Rgb, p: f64, b: Rgb) -> Rgb {
 }
 
 // ---------------------------------------------------------------------------
-// Layout, in points, top-down; numbers follow index.html's CSS
+// Layout, in points, top-down; numbers follow the original web page's CSS
 // ---------------------------------------------------------------------------
 
 const WIDTH: f64 = 640.0;
@@ -294,7 +294,6 @@ enum Ctl {
     Autostart,
     Log,
     Folder,
-    Classic,
 }
 
 struct Ui {
@@ -1453,7 +1452,7 @@ fn draw_control(c: &Control) {
             }
         }
         // `.link`
-        Ctl::Log | Ctl::Folder | Ctl::Classic => {
+        Ctl::Log | Ctl::Folder => {
             let f = font(11.0, 400.0);
             let col = if s.hover { p.text } else { p.dim };
             draw_text(&s.title, &f, col, 1.0, 4.0, mid, b.size.width);
@@ -1499,7 +1498,6 @@ fn press(c: &Control) {
         }
         Ctl::Log => child::send(&serde_json::json!({ "cmd": "openLog" })),
         Ctl::Folder => child::send(&serde_json::json!({ "cmd": "openConfigDir" })),
-        Ctl::Classic => child::send(&serde_json::json!({ "cmd": "settingsUi", "native": false })),
     }
 }
 
@@ -1812,18 +1810,14 @@ fn build(mtm: MainThreadMarker) -> Ui {
     panel.addSubview(&switch);
     root.addSubview(&panel);
 
-    let links: Vec<_> = [
-        (Ctl::Log, "Log"),
-        (Ctl::Folder, "Config folder"),
-        (Ctl::Classic, "Classic window"),
-    ]
-    .into_iter()
-    .map(|(id, t)| {
-        let c = Control::new(mtm, id, t);
-        root.addSubview(&c);
-        c
-    })
-    .collect();
+    let links: Vec<_> = [(Ctl::Log, "Log"), (Ctl::Folder, "Config folder")]
+        .into_iter()
+        .map(|(id, t)| {
+            let c = Control::new(mtm, id, t);
+            root.addSubview(&c);
+            c
+        })
+        .collect();
 
     Ui {
         window,

@@ -9,8 +9,8 @@
 #   ./build.sh --run          # ... then launch it in the menu bar
 #   ./build.sh --skip-tests
 #
-# Linux (X11; needs libgtk-3-dev libwebkit2gtk-4.1-dev libxdo-dev
-# libayatana-appindicator3-dev to build):
+# Linux (X11; needs libgtk-3-dev libxdo-dev libayatana-appindicator3-dev
+# to build):
 #   ./build.sh                # test + release binary + dist/cantos-VERSION-linux-ARCH.tar.gz
 #   ./build.sh --run          # ... then launch it in the tray
 set -euo pipefail

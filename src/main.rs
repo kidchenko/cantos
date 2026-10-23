@@ -56,7 +56,7 @@ mod x11;
 
 use app::{App, Flow, UserEvent};
 use config::Config;
-use log::{lerror, linfo, lwarn};
+use log::{lerror, linfo};
 use std::sync::{Arc, Mutex};
 use tao::event::{Event, StartCause};
 use tao::event_loop::{ControlFlow, EventLoopBuilder};
@@ -228,13 +228,6 @@ fn log_startup() {
     );
     #[cfg(target_os = "linux")]
     if let Some(why) = x11::session_warning() {
-        lwarn!("{why}");
-    }
-    // Recorded at every start, because "Settings does nothing" is otherwise
-    // indistinguishable from a dozen other faults, and on Windows this is
-    // the answer most of the time.
-    match ui::runtime_version() {
-        Some(v) => linfo!("webview: {v}"),
-        None => lwarn!("webview: NOT INSTALLED, the settings window cannot open"),
+        log::lwarn!("{why}");
     }
 }

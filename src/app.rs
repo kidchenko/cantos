@@ -6,13 +6,13 @@
 //! method rather than another branch of one long closure.
 
 use crate::config::Config;
-use crate::config::{SettingsUi, SharedConfig};
+use crate::config::SharedConfig;
 use crate::log::{lerror, linfo};
 use crate::ui::page::{self, Msg};
 use crate::ui::{self, Settings};
 use crate::{actions, autostart, log, util};
 
-use tao::event::{Event, WindowEvent};
+use tao::event::Event;
 use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
 use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem};
 use tray_icon::{Icon as TrayImage, MouseButton, TrayIcon, TrayIconBuilder, TrayIconEvent};
@@ -31,8 +31,6 @@ pub enum UserEvent {
     /// The native settings window's process ended. Carries the generation it
     /// was opened as, so a window closing late cannot clear a newer one.
     SettingsClosed(u64),
-    /// Switch between the web and the native settings window.
-    ToggleSettingsUi,
     /// A JSON message from the settings page.
     Ipc(String),
 }
@@ -50,19 +48,12 @@ pub struct App {
     tray: TrayIcon,
     /// The "Hot corners enabled" checkbox, kept in step with the config.
     enabled_item: CheckMenuItem,
-    /// `None` whenever the window is closed, and that is the point. Dropping
-    /// it tears down the webview's processes, which is what returns the app to
-    /// a few megabytes resident.
+    /// `None` whenever the window is closed, and that is the point: the
+    /// window is its own process, and closing it returns the app to a few
+    /// megabytes resident.
     settings: Option<Settings>,
     /// Counts windows opened; see `UserEvent::SettingsClosed`.
     settings_gen: u64,
-    /// "New settings window": which window `open_settings` builds.
-    native_ui_item: CheckMenuItem,
-    /// macOS: the application menu. Never visible (Cantos has no menu bar of
-    /// its own), but key equivalents are routed through it, so without it
-    /// Cmd+C/V/A/Z do nothing in the settings page's text fields.
-    #[cfg(target_os = "macos")]
-    _app_menu: Menu,
 }
 
 impl App {
@@ -73,30 +64,18 @@ impl App {
         let settings_item = MenuItem::new("Settings\u{2026}", true, None);
         let log_item = MenuItem::new("Open log", true, None);
         let quit_item = MenuItem::new("Quit Cantos", true, None);
-        let native_ui = cfg
-            .lock()
-            .map(|c| c.settings_ui == SettingsUi::Native)
-            .unwrap_or(false);
-        let native_ui_item = CheckMenuItem::new("New settings window", true, native_ui, None);
 
         let menu = Menu::new();
         // No pause on a Mac: the Dock fires the corners, and its settings are
         // what Cantos edits there.
         #[cfg(not(target_os = "macos"))]
         let _ = menu.append(&enabled_item);
-        // Only where a native window exists yet; see `SettingsUi`.
-        if SettingsUi::NATIVE_AVAILABLE {
-            let _ = menu.append(&native_ui_item);
-        }
         let _ = menu.append_items(&[
             &settings_item,
             &PredefinedMenuItem::separator(),
             &log_item,
             &quit_item,
         ]);
-
-        #[cfg(target_os = "macos")]
-        let (app_menu, app_quit) = app_menu();
 
         // Captured by id, because the menu items themselves are moved into the
         // menu and the handler runs on another callback entirely.
@@ -105,13 +84,8 @@ impl App {
             MenuIds {
                 enabled: enabled_item.id().clone(),
                 settings: settings_item.id().clone(),
-                native_ui: native_ui_item.id().clone(),
                 log: log_item.id().clone(),
-                quit: vec![
-                    quit_item.id().clone(),
-                    #[cfg(target_os = "macos")]
-                    app_quit,
-                ],
+                quit: quit_item.id().clone(),
             },
         );
         forward_tray_events(&proxy);
@@ -137,16 +111,13 @@ impl App {
             enabled_item,
             settings: None,
             settings_gen: 0,
-            native_ui_item,
-            #[cfg(target_os = "macos")]
-            _app_menu: app_menu,
         })
     }
 
     pub fn handle(
         &mut self,
         event: Event<UserEvent>,
-        target: &EventLoopWindowTarget<UserEvent>,
+        _target: &EventLoopWindowTarget<UserEvent>,
     ) -> Flow {
         match event {
             Event::UserEvent(UserEvent::Quit) => {
@@ -156,14 +127,13 @@ impl App {
             }
             Event::UserEvent(UserEvent::OpenLog) => log::reveal(),
             Event::UserEvent(UserEvent::ToggleEnabled) => self.toggle_enabled(),
-            Event::UserEvent(UserEvent::OpenSettings) => self.open_settings(target),
+            Event::UserEvent(UserEvent::OpenSettings) => self.open_settings(),
             Event::UserEvent(UserEvent::SettingsClosed(generation)) => {
                 if generation == self.settings_gen {
                     linfo!("native settings window closed");
                     self.settings = None;
                 }
             }
-            Event::UserEvent(UserEvent::ToggleSettingsUi) => self.toggle_settings_ui(target),
             Event::UserEvent(UserEvent::ConfigReloaded) => self.sync_to_config(),
             Event::UserEvent(UserEvent::Ipc(body)) => self.handle_ipc(&body),
             // macOS: opening Cantos.app again (Finder, Spotlight, `open`)
@@ -172,14 +142,7 @@ impl App {
             // instead; treat it like any other relaunch.
             Event::Reopen { .. } => {
                 linfo!("reopened by LaunchServices; opening settings");
-                self.open_settings(target);
-            }
-            Event::WindowEvent {
-                event: WindowEvent::CloseRequested,
-                ..
-            } => {
-                linfo!("settings window closed; tearing down the webview");
-                self.settings = None;
+                self.open_settings();
             }
             _ => {}
         }
@@ -197,7 +160,7 @@ impl App {
         self.refresh_page();
     }
 
-    fn open_settings(&mut self, target: &EventLoopWindowTarget<UserEvent>) {
+    fn open_settings(&mut self) {
         // Already open: bring it forward rather than opening a second one.
         if let Some(s) = &self.settings {
             linfo!("settings already open; raising it");
@@ -206,24 +169,13 @@ impl App {
         }
 
         self.settings_gen += 1;
-        let opened = if self.native_ui_wanted() {
-            self.open_native_settings()
-        } else {
-            let proxy = self.proxy.clone();
-            ui::build(target, &page::platform_script(), move |body| {
-                let _ = proxy.send_event(UserEvent::Ipc(body));
-            })
-            .map(|w| Settings::Web(Box::new(w)))
-        };
-        match opened {
+        match self.spawn_settings() {
             Ok(s) => {
                 linfo!("settings window opened");
                 self.settings = Some(s);
             }
-            // The likeliest cause by far is a missing webview runtime
-            // (WebView2 on Windows, WebKitGTK on Linux). Say so in a dialog as
-            // well as the log: this is the app's only window, so a log-only
-            // failure just looks like being ignored.
+            // Say so in a dialog as well as the log: this is the app's only
+            // window, so a log-only failure just looks like being ignored.
             Err(e) => {
                 lerror!("could not open settings window: {e}");
                 ui::report_open_failure(&e);
@@ -231,16 +183,8 @@ impl App {
         }
     }
 
-    fn native_ui_wanted(&self) -> bool {
-        SettingsUi::NATIVE_AVAILABLE
-            && self
-                .cfg
-                .lock()
-                .map(|c| c.settings_ui == SettingsUi::Native)
-                .unwrap_or(false)
-    }
-
-    fn open_native_settings(&self) -> Result<Settings, String> {
+    /// Start the settings window's process; see `ui::child`.
+    fn spawn_settings(&self) -> Result<Settings, String> {
         let (messages, closed) = (self.proxy.clone(), self.proxy.clone());
         let generation = self.settings_gen;
         ui::child::Child::spawn(
@@ -251,26 +195,7 @@ impl App {
                 let _ = closed.send_event(UserEvent::SettingsClosed(generation));
             },
         )
-        .map(Settings::Native)
-    }
-
-    /// Flip between the two windows, reopening the settings in the other one
-    /// if they were open.
-    fn toggle_settings_ui(&mut self, target: &EventLoopWindowTarget<UserEvent>) {
-        let now = {
-            let Ok(mut c) = self.cfg.lock() else { return };
-            c.settings_ui = match c.settings_ui {
-                SettingsUi::Web => SettingsUi::Native,
-                SettingsUi::Native => SettingsUi::Web,
-            };
-            let _ = c.save();
-            c.settings_ui
-        };
-        linfo!("settings window is now {now:?}");
-        self.native_ui_item.set_checked(now == SettingsUi::Native);
-        if self.settings.take().is_some() {
-            self.open_settings(target);
-        }
+        .map(Settings)
     }
 
     fn handle_ipc(&mut self, body: &str) {
@@ -307,11 +232,6 @@ impl App {
                 }
             }
             Msg::Autostart { value } => self.set_autostart(value),
-            Msg::SettingsUi { native } => {
-                if native != self.native_ui_wanted() {
-                    let _ = self.proxy.send_event(UserEvent::ToggleSettingsUi);
-                }
-            }
             #[cfg(target_os = "macos")]
             Msg::Native { corners } => self.set_native(*corners),
         }
@@ -457,48 +377,11 @@ fn tray_image(enabled: bool) -> Result<TrayImage, String> {
     TrayImage::from_rgba(rgba, edge, edge).map_err(|e| format!("tray icon is malformed: {e}"))
 }
 
-/// macOS: an application menu with Quit and the standard Edit commands, so the
-/// settings window behaves like any other Mac window. Returns the menu, which
-/// must be kept alive, and the id of its Quit item.
-#[cfg(target_os = "macos")]
-fn app_menu() -> (Menu, MenuId) {
-    use tray_icon::menu::Submenu;
-
-    let quit = MenuItem::new("Quit Cantos", true, "CmdOrCtrl+Q".parse().ok());
-    let quit_id = quit.id().clone();
-    let app = Submenu::with_items(
-        "Cantos",
-        true,
-        &[&PredefinedMenuItem::close_window(None), &quit],
-    );
-    let edit = Submenu::with_items(
-        "Edit",
-        true,
-        &[
-            &PredefinedMenuItem::undo(None),
-            &PredefinedMenuItem::redo(None),
-            &PredefinedMenuItem::separator(),
-            &PredefinedMenuItem::cut(None),
-            &PredefinedMenuItem::copy(None),
-            &PredefinedMenuItem::paste(None),
-            &PredefinedMenuItem::select_all(None),
-        ],
-    );
-    let menu = Menu::new();
-    if let (Ok(app), Ok(edit)) = (app, edit) {
-        let _ = menu.append_items(&[&app, &edit]);
-    }
-    menu.init_for_nsapp();
-    (menu, quit_id)
-}
-
 struct MenuIds {
     enabled: MenuId,
     settings: MenuId,
-    native_ui: MenuId,
     log: MenuId,
-    /// The tray's Quit, and on macOS the application menu's Cmd+Q as well.
-    quit: Vec<MenuId>,
+    quit: MenuId,
 }
 
 fn forward_menu_events(proxy: &EventLoopProxy<UserEvent>, ids: MenuIds) {
@@ -508,11 +391,9 @@ fn forward_menu_events(proxy: &EventLoopProxy<UserEvent>, ids: MenuIds) {
             UserEvent::ToggleEnabled
         } else if e.id == ids.settings {
             UserEvent::OpenSettings
-        } else if e.id == ids.native_ui {
-            UserEvent::ToggleSettingsUi
         } else if e.id == ids.log {
             UserEvent::OpenLog
-        } else if ids.quit.contains(&e.id) {
+        } else if e.id == ids.quit {
             UserEvent::Quit
         } else {
             return;

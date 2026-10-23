@@ -76,7 +76,7 @@ fn kind_of(action: &Action) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// Styling: index.html's tokens and rules, in GTK's CSS
+// Styling: the original web page's tokens and rules, in GTK's CSS
 // ---------------------------------------------------------------------------
 
 struct Tokens {

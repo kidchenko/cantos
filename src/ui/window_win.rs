@@ -111,7 +111,7 @@ const LINKS: [(&str, &str); 3] = [
 
 const PLACEHOLDERS: [&str; 2] = ["Program, script, document, or URL", "Arguments"];
 
-/// The page's 16x16 stroke glyph per action, `GLYPH` in index.html.
+/// The page's 16x16 stroke glyph per action, `GLYPH` in the original web page.
 fn glyph_for(kind: &str) -> &'static str {
     match kind {
         "taskView" => "M2 3h5v4H2zM9 3h5v4H9zM2 9h5v4H2zM9 9h5v4H9z",
@@ -169,7 +169,7 @@ fn action_from(kind: &str, current: &Action) -> Action {
 }
 
 // ---------------------------------------------------------------------------
-// Tokens: index.html's `:root`, dark and light
+// Tokens: the original web page's `:root`, dark and light
 // ---------------------------------------------------------------------------
 
 struct Tokens {

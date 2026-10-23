@@ -44,12 +44,13 @@ The app is ad-hoc signed, not notarised, so the first open is refused.
 Right-click Cantos.app, choose **Open**, then **Open** again (on macOS 15 and
 later: System Settings > Privacy & Security > **Open Anyway**).
 
-On a Mac, Cantos is a small front end for macOS's own hot corners (System
+On a Mac, Cantos is mostly a front end for macOS's own hot corners (System
 Settings > Desktop & Dock > Hot Corners) rather than a second set of them. It
 reads them from the Dock, shows them in its window, and writes your changes
-back; the Dock does the firing, so nothing ever fires twice. Change a corner
-in System Settings and Cantos shows it within a second, and the other way
-round.
+back; the Dock does the firing, so those corners keep working even when
+Cantos is not running. Change a corner in System Settings and Cantos shows it
+within a second, and the other way round. A corner can also take one of
+Cantos's own actions, which the Dock cannot do; see [Actions](#actions).
 
 ### Linux
 
@@ -61,11 +62,11 @@ tar xzf cantos-*-linux-x86_64.tar.gz
 cd cantos-*-linux-x86_64 && ./install.sh   # into ~/.local, no root
 ```
 
-It needs WebKitGTK and an AppIndicator library, which most desktops already
+It needs GTK 3 and an AppIndicator library, which most desktops already
 have. On Debian and Ubuntu:
 
 ```sh
-sudo apt install libwebkit2gtk-4.1-0 libayatana-appindicator3-1 libxdo3
+sudo apt install libgtk-3-0 libayatana-appindicator3-1 libxdo3
 ```
 
 **X11 only.** Under Wayland an app cannot read the cursor position over other
@@ -91,16 +92,21 @@ yourself.
 
 **macOS**
 
-Exactly the list System Settings offers, since these are its corners: Mission
-Control · Application Windows · Desktop · Notification Centre · Launchpad ·
-Quick Note · Start Screen Saver · Disable Screen Saver · Put Display to Sleep
-· Lock Screen. Each corner can also require a key (⇧ ⌃ ⌥ ⌘), as in System
-Settings.
+Each corner's menu has two sections. Each corner can also require a key
+(⇧ ⌃ ⌥ ⌘), as in System Settings.
 
-The dwell, cooldown, corner size, multi-monitor, fullscreen and dragging
-settings below are Cantos's own detector's, so they do not appear on a Mac;
-neither do custom commands. macOS fires its corners at the outer corners of
-the whole display arrangement.
+| | |
+|---|---|
+| **macOS** (always work, even with Cantos quit) | Mission Control · Application Windows · Desktop · Notification Centre · Launchpad · Quick Note · Start Screen Saver · Disable Screen Saver · Put Display to Sleep · Lock Screen |
+| **Cantos** (while Cantos runs) | Spotlight `⌘Space` · Finder · System Settings · Screenshot · Emoji & Symbols `⌃⌘Space` · Previous desktop `⌃←` · Next desktop `⌃→` · Custom command |
+
+The first section is the Dock's own: Cantos writes the corner into the Dock's
+settings and the Dock fires it. A Cantos action clears that corner in the
+Dock and Cantos fires it itself, so nothing ever fires twice; its card in the
+settings window is tagged CANTOS. The actions with a shortcut beside them
+press it, which macOS only allows with the **Accessibility** permission: the
+first time one fires, macOS asks. macOS fires its own corners at the outer
+corners of the whole display arrangement, and Cantos does the same.
 
 Saving a change restarts the Dock, because the Dock only reads these
 settings when it starts. It is back within a second, with your windows and
@@ -185,10 +191,10 @@ writes and every change it sees made elsewhere.
 **Nothing fires on Linux.** Check for a Wayland warning in the log; see
 [Linux](#linux) above.
 
-**The settings window won't open.** On Windows it needs the Microsoft WebView2 runtime.
-Windows 11 ships it; on Windows 10 it arrives with Edge. If it's missing,
-Cantos says so and offers the download page. Hot corners keep working, and you
-can still edit `config.json` by hand.
+**The settings window won't open.** It is a separate process
+(`cantos --settings-window`), so a failure to start it says so in a dialog and
+in the log. Hot corners keep working, and you can still edit `config.json` by
+hand.
 
 **Launching Cantos again does nothing visible.** A second launch tells the
 first to show its settings, then exits. A brief flicker is expected.
@@ -231,10 +237,10 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ./build.sh --universal --dmg   # macOS: arm64 + x86_64 in one .app, in a .dmg
 ```
 
-On Linux, first install the GTK, WebKitGTK and AppIndicator headers:
+On Linux, first install the GTK and AppIndicator headers:
 
 ```sh
-sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev libxdo-dev libayatana-appindicator3-dev
+sudo apt install libgtk-3-dev libxdo-dev libayatana-appindicator3-dev
 ```
 
 ## Tests
@@ -248,6 +254,12 @@ The integration scripts drive the real cursor, so run them on an idle machine.
 See [`tests/README.md`](tests/README.md).
 
 ## How it works
+
+The settings window is native on every platform: AppKit on macOS, Win32 on
+Windows, GTK on Linux, each drawing the same design from the same colour
+tokens. It runs as its own process, started when you open it and gone when
+you close it, so the tray app itself stays at a few megabytes. The two talk in
+JSON lines over the window's stdin and stdout (`src/ui/child.rs`).
 
 Polls the cursor position at ~33 Hz on every platform. On Windows that is
 `GetCursorPos` instead of a `WH_MOUSE_LL` hook. A

@@ -6,7 +6,6 @@ fn main() {
 
     println!("cargo:rerun-if-changed=assets/app.manifest");
     println!("cargo:rerun-if-changed=assets/icon.ico");
-    println!("cargo:rerun-if-changed=src/ui/index.html");
 }
 
 #[cfg(windows)]

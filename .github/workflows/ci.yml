@@ -23,14 +23,15 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      # tao, wry and tray-icon build against GTK, WebKitGTK and AppIndicator.
+      # tao and tray-icon build against GTK and AppIndicator; the settings
+      # window is GTK too.
       # 22.04 rather than latest so the binary links against a glibc old
       # enough to run on the LTS releases people actually have installed.
       - name: Linux build dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libxdo-dev libayatana-appindicator3-dev
+          sudo apt-get install -y libgtk-3-dev libxdo-dev libayatana-appindicator3-dev
 
       - name: Format
         run: cargo fmt --check

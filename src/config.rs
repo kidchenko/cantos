@@ -142,22 +142,6 @@ pub enum Modifier {
     Win,
 }
 
-/// Which settings window opens. A switch for the migration from the web page
-/// to native windows: `Web` until the native one has proven itself, then the
-/// default flips and, later, `Web` goes.
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
-#[serde(rename_all = "camelCase")]
-pub enum SettingsUi {
-    #[default]
-    Web,
-    Native,
-}
-
-impl SettingsUi {
-    /// Whether this platform has a native window yet.
-    pub const NATIVE_AVAILABLE: bool = cfg!(any(target_os = "macos", target_os = "linux", windows));
-}
-
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Config {
@@ -186,7 +170,6 @@ pub struct Config {
     /// `modifier`. Only the Mac window sets these, mirroring the Dock's own
     /// per-corner keys.
     pub corner_keys: [Modifier; 4],
-    pub settings_ui: SettingsUi,
     // Run-at-login is deliberately absent. It lives with the OS (the HKCU Run
     // key, Login Items, an XDG autostart entry) and nowhere else: mirroring
     // it here gave us a field that was written but never read, so
@@ -223,7 +206,6 @@ impl Default for Config {
             suppress_while_dragging: true,
             modifier: Modifier::None,
             corner_keys: [Modifier::None; 4],
-            settings_ui: SettingsUi::Web,
         }
     }
 }

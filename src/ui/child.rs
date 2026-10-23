@@ -94,7 +94,7 @@ impl Drop for Child {
     }
 }
 
-// The window's side, where a native window exists (see `SettingsUi`).
+// The window's side.
 
 /// A call from the tray, as the child reads it.
 #[cfg(any(target_os = "macos", target_os = "linux", windows))]

@@ -11,11 +11,13 @@ Releases are tagged `vX.Y.Z`, which is what triggers the release workflow.
 ### Added
 
 - **macOS.** Cantos runs in the menu bar on macOS 11 and later, as one
-  universal `.dmg` for Apple silicon and Intel. There it is a front end for
-  macOS's own hot corners rather than a second set: it reads them from the
-  Dock, edits them with the same actions and per-corner keys as System
-  Settings, and keeps up with changes made there. Run-at-login is a Login
-  Item.
+  universal `.dmg` for Apple silicon and Intel. There it is mostly a front
+  end for macOS's own hot corners: it reads them from the Dock, edits them
+  with the same actions and per-corner keys as System Settings, and keeps up
+  with changes made there, so those corners work even with Cantos quit. A
+  corner can instead take a Cantos action the Dock cannot do (Spotlight,
+  Finder, switching desktops, a custom command), which Cantos fires while it
+  runs. Run-at-login is a Login Item.
 - **Linux (X11).** Cantos runs in the tray on X11 desktops, from a tarball
   that installs into `~/.local` without root. Corners can open the overview,
   show the desktop, switch desktops, take a screenshot, open Files or
@@ -24,6 +26,15 @@ Releases are tagged `vX.Y.Z`, which is what triggers the release workflow.
   not let an app read the cursor over other windows.
 - The settings window lists only the actions the platform it runs on can
   perform, under that platform's names.
+
+### Changed
+
+- **The settings window is native** on every platform: AppKit on macOS,
+  Win32 on Windows, GTK on Linux, keeping the same design. It runs as its own
+  process, so closing it gives all of its memory back: about 12 MB for the
+  tray on a Mac afterwards, where the old window left around 50 MB behind.
+- **No more WebView2 or WebKit.** The web settings page is gone, so Windows no
+  longer needs the WebView2 runtime and Linux no longer needs WebKitGTK.
 
 ## [0.0.2] - 2026-09-12
 

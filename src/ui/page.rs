@@ -7,9 +7,6 @@
 //!   * Rust -> page is the `push_*`/[`toast`] functions, which call
 //!     `window.__hc.<name>(...)` in the document, or send the same call to the
 //!     native window (see [`super::Settings::push`]).
-//!   * Before any of that, [`platform_script`] tells the page which platform
-//!     it is on: the actions on offer, and what the keys and settings are
-//!     called here. The page builds its controls from it.
 //!
 //! Every argument crosses as a JSON value, never spliced in as text. Paths and
 //! OS error messages end up in these calls, and one stray quote would
@@ -18,7 +15,7 @@
 use super::Settings;
 use crate::config::SharedConfig;
 use crate::config::{Config, MonitorMode};
-use crate::{actions, autostart, geometry, log};
+use crate::{autostart, geometry, log};
 use serde::Deserialize;
 
 /// Commands the settings page can send us.
@@ -41,10 +38,6 @@ pub enum Msg {
     Reset,
     OpenLog,
     OpenConfigDir,
-    /// Use the native settings window (`true`) or this web one.
-    SettingsUi {
-        native: bool,
-    },
     /// macOS: the corners as the page now wants them, written to the Dock.
     /// Sent whole, so a preset that changes all four restarts the Dock once.
     #[cfg(target_os = "macos")]
@@ -57,70 +50,6 @@ impl Msg {
     pub fn parse(body: &str) -> Option<Self> {
         serde_json::from_str(body).ok()
     }
-}
-
-/// `window.__platform = {...}`, run before the page's own script.
-///
-/// Static for the life of the process, so it rides on the webview's
-/// initialisation script rather than the state push: the page needs it to
-/// build its dropdowns, before it has asked for anything.
-pub fn platform_script() -> String {
-    let actions: Vec<_> = actions::CATALOG
-        .iter()
-        .map(|(group, items)| serde_json::json!([group, items]))
-        .collect();
-    let (modifiers, autostart, drag_hint) = if cfg!(target_os = "macos") {
-        (
-            [
-                ("ctrl", "Control"),
-                ("alt", "Option"),
-                ("shift", "Shift"),
-                ("win", "Command"),
-            ],
-            "Open at login",
-            "Dragging into a corner never fires it",
-        )
-    } else if cfg!(target_os = "linux") {
-        (
-            [
-                ("ctrl", "Ctrl"),
-                ("alt", "Alt"),
-                ("shift", "Shift"),
-                ("win", "Super"),
-            ],
-            "Start on login",
-            "Dragging into a corner never fires it",
-        )
-    } else {
-        (
-            [
-                ("ctrl", "Ctrl"),
-                ("alt", "Alt"),
-                ("shift", "Shift"),
-                ("win", "Windows"),
-            ],
-            "Start with Windows",
-            "Snapping a window to a corner stays a snap",
-        )
-    };
-    // macOS fronts the Dock's own hot corners (see `native`): the page shows
-    // one modifier per corner, as System Settings does, and hides the
-    // settings that only Cantos's own detector has.
-    #[cfg(target_os = "macos")]
-    let (native, untestable) = (true, actions::UNTESTABLE);
-    #[cfg(not(target_os = "macos"))]
-    let (native, untestable): (bool, &[&str]) = (false, &[]);
-    let platform = serde_json::json!({
-        "os": std::env::consts::OS,
-        "native": native,
-        "untestable": untestable,
-        "nativeUi": crate::config::SettingsUi::NATIVE_AVAILABLE,
-        "actions": actions,
-        "modifiers": modifiers,
-        "autostartLabel": autostart,
-        "dragHint": drag_hint,
-    });
-    format!("window.__platform = {platform};")
 }
 
 /// Everything the page needs to render itself from scratch.
@@ -214,7 +143,7 @@ mod tests {
     use super::Msg;
     use crate::config::{Action, Modifier};
 
-    /// The exact shape `save()` in index.html sends on a Mac.
+    /// The exact shape the Mac window sends.
     #[test]
     fn the_pages_native_message_parses() {
         let body = r#"{"cmd":"native","corners":[
