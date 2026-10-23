@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cantos: macOS-style hot corners for Windows</title>
-<meta name="description" content="Throw the cursor into a corner of the screen and something happens. A 0.72 MB tray app for Windows. Free and open source.">
+<title>Cantos: hot corners for Windows, macOS and Linux</title>
+<meta name="description" content="Throw the cursor into a corner of the screen and something happens. A tray app of about 1 MB for Windows, macOS and Linux. Free and open source.">
 <link rel="icon" href="img/icon.svg" type="image/svg+xml">
 
-<meta property="og:title" content="Cantos: macOS-style hot corners for Windows">
+<meta property="og:title" content="Cantos: hot corners for Windows, macOS and Linux">
 <meta property="og:description" content="Throw the cursor into a corner of the screen and something happens.">
 <meta property="og:image" content="https://josebarbosa.dev/cantos/img/icon-256.png">
 <meta property="og:type" content="website">
@@ -62,10 +62,10 @@
     font-size: clamp(1.15rem, 3.6vw, 1.5rem);
     color: var(--dim);
     margin: 14px auto 0;
-    max-width: 30ch;
+    max-width: 40ch;
   }
 
-  .cta { margin: 38px 0 0; }
+  .cta { margin: 38px 0 0; display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
 
   .download {
     display: inline-block;
@@ -73,12 +73,21 @@
     color: #08111f;
     font-size: 1.05rem;
     font-weight: 600;
-    padding: 15px 34px;
+    padding: 15px 26px;
     border-radius: 999px;
     transition: transform .15s ease, filter .15s ease;
   }
   .download:hover { filter: brightness(1.08); transform: translateY(-1px); text-decoration: none; }
   .download:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+  /* Windows leads by default; a Mac or Linux visitor gets their own first. */
+  .download.ghost, .os-mac .dl-win, .os-linux .dl-win {
+    background: transparent; color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--line);
+  }
+  .os-mac .dl-mac, .os-linux .dl-linux {
+    background: var(--accent); color: #08111f; box-shadow: none; order: -1;
+  }
+  .for-mac, .for-linux, .os-mac .for-win, .os-linux .for-win { display: none; }
+  .os-mac .for-mac, .os-linux .for-linux { display: block; }
 
   .alt {
     margin-top: 18px;
@@ -200,19 +209,19 @@
   <header>
     <img src="img/icon.svg" alt="" width="132" height="132">
     <h1>Cantos</h1>
-    <p class="tagline">Hot corners for Windows</p>
-
+    <p class="tagline">Hot corners for Windows, macOS and Linux</p>
     <div class="cta">
-      <a class="download" id="download"
-         href="https://github.com/kidchenko/cantos/releases/latest">
-        Download for Windows
-      </a>
-      <div class="alt">
-        <a href="https://github.com/kidchenko/cantos">Source</a>
-        <a href="https://github.com/kidchenko/cantos/releases">Releases</a>
-        <a href="https://github.com/kidchenko/cantos/issues">Support</a>
-      </div>
-      <p class="req" id="req">Windows 10 or later · x64 · free and open source</p>
+      <a class="download dl-win" id="dl-win" href="https://github.com/kidchenko/cantos/releases/latest">Download for Windows</a>
+      <a class="download ghost dl-mac" href="https://github.com/kidchenko/cantos/releases/latest/download/Cantos.dmg">Download for macOS</a>
+      <a class="download ghost dl-linux" id="dl-linux" href="https://github.com/kidchenko/cantos/releases/latest">Download for Linux</a>
+    </div>
+    <p class="req for-win">or <code>scoop install kidchenko/cantos</code> · Windows 10 or later · x64</p>
+    <p class="req for-mac">or <code>brew install --cask kidchenko/tap/cantos</code> · macOS 11 or later · Apple silicon and Intel</p>
+    <p class="req for-linux">x86_64 · X11 session · GTK 3 and AppIndicator</p>
+    <div class="alt">
+      <a href="https://github.com/kidchenko/cantos">Source</a>
+      <a href="https://github.com/kidchenko/cantos/releases">Releases</a>
+      <a href="https://github.com/kidchenko/cantos/issues">Support</a>
     </div>
   </header>
 
@@ -240,32 +249,40 @@
 
     <section>
       <p>Throw the cursor into a corner of the screen and something happens.
-      Task View, show desktop, lock, a screenshot, or any program you like.</p>
+      Task View or Mission Control, show desktop, lock, a screenshot, or any
+        program you like.</p>
 
       <p>A corner does not fire the instant you touch it. The cursor has to
       rest there for a moment, which is the difference between a hot corner
       and a booby trap. Overshoot toward a window's Close button and nothing
       happens, because nothing should.</p>
 
-      <p>One executable, under a megabyte, sitting in the tray on about 2 MB of
-      memory. No installer bloat, no background service, no account.</p>
+      <p>One executable of about a megabyte, sitting in the tray (or the menu
+        bar) on about 2 MB of memory. No installer bloat, no background service,
+        no account.</p>
+
+      <p>On a Mac, Cantos works with macOS's own hot corners instead of adding
+        a second set. It shows and edits the corners from System Settings, so
+        they keep firing even with Cantos quit, and it adds what the Dock can't
+        do: Spotlight, Finder, switching desktops, or a command of your own.</p>
 
       <h3>Highlights</h3>
       <ul class="features">
-        <li><b>Twenty-one actions</b>Task View, show desktop, virtual desktops,
-          Start, Search, Quick Settings, clipboard history, screenshot, lock,
-          screensaver, display off, and more.</li>
+        <li><b>Actions for each platform</b>Task View, virtual desktops, Quick
+          Settings and clipboard history on Windows; Mission Control, Launchpad,
+          Spotlight and Lock Screen on a Mac; Overview, desktops and screenshot
+          on Linux.</li>
         <li><b>Custom commands</b>Point a corner at any program, script,
           document, or URL, with arguments.</li>
         <li><b>Tunable trigger</b>Dwell, cooldown, and corner size, so it fires
           when you mean it and not when you don't.</li>
-        <li><b>Hold a key</b>Optionally require Ctrl, Alt, Shift, or Win before
-          a corner will fire at all.</li>
-        <li><b>Snap-aware</b>Dragging a window into a corner stays a Windows
+        <li><b>Hold a key</b>Optionally require Ctrl, Alt, Shift, or Win
+          (Super on Linux, ⇧ ⌃ ⌥ ⌘ on a Mac) before a corner will fire.</li>
+        <li><b>Snap-aware</b>On Windows, dragging a window into a corner stays a Windows
           Snap. No corner fires while a mouse button is down.</li>
-        <li><b>Stays out of games</b>Suppressed over anything fullscreen. An
+        <li><b>Stays out of games</b>On Windows and Linux, suppressed over anything fullscreen. An
           ordinary maximised window still counts as ordinary.</li>
-        <li><b>Multi-monitor</b>The outer corners of the whole desktop, every
+        <li><b>Multi-monitor</b>On Windows and Linux, the outer corners of the whole desktop, every
           corner of every screen, or the primary display only.</li>
       </ul>
     </section>
@@ -274,17 +291,19 @@
       <h2>Privacy</h2>
       <p>Cantos makes no network requests. There is no telemetry, no update
       check, no account, and nothing is ever uploaded. The dependency tree
-      contains no HTTP client at all, and the settings window is a local
-      document that loads nothing from the internet.</p>
-      <p>Your settings are a single JSON file in
-      <code>%APPDATA%\Cantos</code>, which you are welcome to read, edit, or
-      delete.</p>
+      contains no HTTP client at all, and the settings window is native (Win32,
+        AppKit or GTK) and loads nothing from the internet.</p>
+      <p>Your settings are a single JSON file in <code>%APPDATA%\Cantos</code>
+        on Windows, <code>~/Library/Application Support/Cantos</code> on a Mac,
+        or <code>~/.config/cantos</code> on Linux, which you are welcome to read,
+        edit, or delete. On a Mac the corners themselves stay in the Dock's
+        preferences, where System Settings keeps them.</p>
     </section>
 
     <section>
       <h2>Tips</h2>
       <ul class="tips">
-        <li>The bottom-left corner is the Start button and the bottom-right is
+        <li>On Windows, the bottom-left corner is the Start button and the bottom-right is
           Aero Peek, so both start out doing nothing. Assign them only if you
           do not use those.</li>
         <li>Edit <code>config.json</code> by hand and the change applies within
@@ -308,7 +327,23 @@
       </details>
 
       <details>
-        <summary>A corner does nothing while a certain app is focused</summary>
+        <summary>macOS won't open it the first time</summary>
+        <div><p>Cantos is ad-hoc signed, not notarised. Right-click Cantos.app,
+          choose <b>Open</b>, then <b>Open</b> again. On macOS 15 and later, go
+          to System Settings &gt; Privacy &amp; Security and click <b>Open
+          Anyway</b>. Installed with Homebrew, it opens straight away.</p></div>
+      </details>
+
+      <details>
+        <summary>Why does macOS ask for Accessibility?</summary>
+        <div><p>Cantos actions that press a shortcut, such as Spotlight or
+          switching desktops, need it; macOS asks the first time one fires.
+          macOS's own corner actions, such as Mission Control, never need it,
+          because the Dock fires those.</p></div>
+      </details>
+
+      <details>
+        <summary>On Windows, a corner does nothing while a certain app is focused</summary>
         <div><p>Windows refuses synthetic keystrokes aimed at a window running
         as administrator. That is a security boundary, not a bug. Actions that
         do not synthesise input, such as Lock, Screensaver, Turn display off,
@@ -316,17 +351,18 @@
       </details>
 
       <details>
-        <summary>The settings window will not open</summary>
-        <div><p>It needs the Microsoft WebView2 runtime. Windows 11 ships it,
-        and on Windows 10 it arrives with Edge. If it is missing, Cantos says
-        so and offers the download page. Your hot corners keep working either
-        way, and you can still edit the settings file by hand.</p></div>
+        <summary>Does it work on Wayland?</summary>
+        <div><p>Not reliably. Under Wayland an app can't read the cursor over
+          other apps' windows, by design, so Cantos needs an X11 session; pick
+          "Xorg" or "X11" at the login screen. Cantos says so in its log and
+          settings window. GNOME and KDE have built-in hot corners for
+          Wayland.</p></div>
       </details>
 
       <details>
         <summary>Does it need administrator rights?</summary>
-        <div><p>No. The app runs as you. The installer asks for elevation only
-        because it writes to Program Files. There is also a portable build that
+        <div><p>No. The app runs as you on every platform. On Windows the
+          installer asks for elevation only because it writes to Program Files. There is also a portable build that
         installs nothing at all.</p></div>
       </details>
 
@@ -362,29 +398,32 @@
 </div>
 
 <script>
-// Point the download button at the current release, read live from GitHub.
-// Doing it here rather than at build time means a new release needs no
-// redeploy, and the button can never point at a version that no longer exists.
-(async () => {
-  const btn = document.getElementById('download');
-  const req = document.getElementById('req');
-  try {
-    const r = await fetch('https://api.github.com/repos/kidchenko/cantos/releases/latest');
-    if (!r.ok) return;
-    const rel = await r.json();
-    const setup = rel.assets.find(a => /Setup.*\.exe$/i.test(a.name));
-    const portable = rel.assets.find(a => /x64\.exe$/i.test(a.name));
-    if (setup) {
-      btn.href = setup.browser_download_url;
-      const mb = (setup.size / 1048576).toFixed(1);
-      req.innerHTML = `Version ${rel.tag_name.replace(/^v/, '')} · ${mb} MB · Windows 10 or later · x64`
-        + (portable ? ` · <a href="${portable.browser_download_url}">portable build</a>` : '');
-    }
-  } catch (e) {
-    // Offline, rate-limited, or blocked: the button still goes to /releases/latest.
-  }
-})();
-</script>
+    // Lead with the visitor's platform. Without script every button still works.
+    try {
+      const p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
+      if (/mac/i.test(p)) document.body.classList.add('os-mac');
+      else if (/linux/i.test(p) && !/android/i.test(navigator.userAgent)) document.body.classList.add('os-linux');
+    } catch (e) {}
+
+    // Point the Windows and Linux buttons at the current release's files, read
+    // live from GitHub: their names carry the version, so a new release needs
+    // no redeploy and a button never points at a file that no longer exists.
+    // Cantos.dmg keeps one name every release, so the Mac button needs no help.
+    (async () => {
+      try {
+        const r = await fetch('https://api.github.com/repos/kidchenko/cantos/releases/latest');
+        if (!r.ok) return;
+        const rel = await r.json();
+        const find = re => rel.assets.find(a => re.test(a.name));
+        const setup = find(/Setup.*\.exe$/i);
+        const linux = find(/linux.*\.tar\.gz$/i);
+        if (setup) document.getElementById('dl-win').href = setup.browser_download_url;
+        if (linux) document.getElementById('dl-linux').href = linux.browser_download_url;
+      } catch (e) {
+        // Offline, rate-limited, or blocked: the buttons still go to /releases/latest.
+      }
+    })();
+  </script>
 
 </body>
 </html>
