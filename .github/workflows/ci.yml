@@ -7,16 +7,31 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # All three, always: each platform's backend is cfg-gated, so a change
+        # that builds on one can still break the others.
+        os: [windows-latest, macos-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-pc-windows-msvc
           components: clippy, rustfmt
 
       - uses: Swatinem/rust-cache@v2
+
+      # tao and tray-icon build against GTK and AppIndicator; the settings
+      # window is GTK too.
+      # 22.04 rather than latest so the binary links against a glibc old
+      # enough to run on the LTS releases people actually have installed.
+      - name: Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libxdo-dev libayatana-appindicator3-dev
 
       - name: Format
         run: cargo fmt --check
@@ -30,11 +45,16 @@ jobs:
       - name: Build
         run: cargo build --release
 
+      # Size is a stated goal for this project, so regressions should be
+      # visible in CI rather than discovered at release time.
       - name: Report binary size
-        shell: pwsh
+        shell: bash
         run: |
-          $f = Get-Item target\release\cantos.exe
-          "binary: {0:N0} bytes ({1:N2} MB)" -f $f.Length, ($f.Length / 1MB)
-          # Size is a stated goal for this project, so regressions should be
-          # visible in CI rather than discovered at release time.
-          if ($f.Length -gt 3MB) { throw "binary exceeded the 3 MB budget" }
+          f=target/release/cantos
+          [ -f "$f.exe" ] && f="$f.exe"
+          bytes=$(wc -c < "$f")
+          echo "binary: $bytes bytes"
+          if [ "$bytes" -gt $((3 * 1024 * 1024)) ]; then
+            echo "::error::binary exceeded the 3 MB budget"
+            exit 1
+          fi

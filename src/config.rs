@@ -1,8 +1,14 @@
-//! Persisted user settings, stored as JSON in %APPDATA%\Cantos\config.json.
+//! Persisted user settings, as JSON in `config.json` under [`Config::dir`]:
+//! `%APPDATA%\Cantos` on Windows, `~/Library/Application Support/Cantos` on
+//! macOS, and `$XDG_CONFIG_HOME/cantos` (usually `~/.config/cantos`) on Linux.
 
 use crate::log::{lerror, linfo};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+
+/// Config shared between the tray, the settings UI and the watcher.
+pub type SharedConfig = Arc<Mutex<Config>>;
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -25,14 +31,21 @@ impl Corner {
 }
 
 /// What a corner does when it fires.
+///
+/// One list for every platform; the shortcuts in the comments are the Windows
+/// ones. Which of these each platform offers, and under what name, is
+/// [`crate::actions::CATALOG`].
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Action {
     /// Corner is inert.
     None,
     // -- Windows and desktops ------------------------------------------
-    /// Win+Tab — the closest Windows analogue to Mission Control.
+    /// Win+Tab. Mission Control on macOS, the Activities overview on Linux:
+    /// the same idea under three names.
     TaskView,
+    /// macOS only: App Exposé, the front app's windows.
+    AppWindows,
     /// Win+D.
     ShowDesktop,
     /// Win+M. Unlike Show desktop this does not toggle back.
@@ -46,15 +59,19 @@ pub enum Action {
     /// Ctrl+Esc. Used in preference to tapping the Windows key on its own,
     /// which the shell ignores if anything else was pressed recently.
     StartMenu,
+    /// macOS only: Launchpad, or Apps from macOS 26.
+    Launchpad,
     /// Win+S.
     Search,
     /// Win+I.
     Settings,
-    /// Win+A — Quick Settings on Windows 11, Action Center on 10.
+    /// Win+A: Quick Settings on Windows 11, Action Center on 10.
     QuickSettings,
-    /// Win+N — Notification Centre.
+    /// Win+N: Notification Centre.
     Notifications,
-    /// Win+X — the power-user menu on the Start button.
+    /// macOS only: Quick Note.
+    QuickNote,
+    /// Win+X: the power-user menu on the Start button.
     QuickLink,
     /// Win+R.
     RunDialog,
@@ -62,13 +79,13 @@ pub enum Action {
     // -- Tools ----------------------------------------------------------
     /// Win+E.
     FileExplorer,
-    /// Win+Shift+S — the screenshot region overlay.
+    /// Win+Shift+S: the screenshot region overlay.
     Screenshot,
-    /// Win+V — clipboard history.
+    /// Win+V: clipboard history.
     Clipboard,
-    /// Win+. — emoji and symbol picker.
+    /// Win+.: emoji and symbol picker.
     Emoji,
-    /// Win+P — second-screen / projection options.
+    /// Win+P: second-screen / projection options.
     ProjectDisplay,
 
     // -- Power and screen -----------------------------------------------
@@ -76,6 +93,9 @@ pub enum Action {
     LockWorkstation,
     /// Kicks off the configured screensaver.
     Screensaver,
+    /// macOS only: keeps the screen saver from starting while the cursor
+    /// rests in the corner. The Dock's to do; it has no action to run.
+    DisableScreenSaver,
     /// Powers the display down; any input wakes it.
     DisplayOff,
     /// Runs an arbitrary executable, script, or URL.
@@ -109,6 +129,9 @@ pub enum MonitorMode {
 
 /// An optional key that must be held for a corner to fire, mirroring the
 /// modifier support in macOS hot corners.
+///
+/// `Win` is each platform's system key (Windows, Command, Super) and `Alt`
+/// is Option on a Mac. The settings page shows the local names.
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 #[serde(rename_all = "camelCase")]
 pub enum Modifier {
@@ -143,10 +166,15 @@ pub struct Config {
     /// too; the same applies to dragging files and selecting text.
     pub suppress_while_dragging: bool,
     pub modifier: Modifier,
-    // Run-at-login is deliberately absent. It lives in the HKCU Run key and
-    // nowhere else: mirroring it here gave us a field that was written but
-    // never read, so hand-editing it in this file appeared to do something
-    // and did not. `autostart::is_enabled()` is the only source of truth.
+    /// A key to hold per corner, indexed like `corners`; `None` defers to
+    /// `modifier`. Only the Mac window sets these, mirroring the Dock's own
+    /// per-corner keys.
+    pub corner_keys: [Modifier; 4],
+    // Run-at-login is deliberately absent. It lives with the OS (the HKCU Run
+    // key, Login Items, an XDG autostart entry) and nowhere else: mirroring
+    // it here gave us a field that was written but never read, so
+    // hand-editing it in this file appeared to do something and did not.
+    // `autostart::is_enabled()` is the only source of truth.
 }
 
 impl Default for Config {
@@ -154,15 +182,22 @@ impl Default for Config {
         Self {
             enabled: true,
             // Default to the two top corners. The bottom corners are left
-            // inert on purpose: bottom-left is the Start button and
-            // bottom-right is Aero Peek, so users already have muscle memory
-            // for throwing the cursor there.
-            corners: [
-                Action::TaskView,    // top-left
-                Action::ShowDesktop, // top-right
-                Action::None,        // bottom-left
-                Action::None,        // bottom-right
-            ],
+            // inert on purpose: on Windows bottom-left is the Start button
+            // and bottom-right is Aero Peek, so users already have muscle
+            // memory for throwing the cursor there.
+            //
+            // A Mac starts with none: there these are the Dock's, and its own
+            // settings are the defaults (see `native`).
+            corners: if cfg!(target_os = "macos") {
+                [Action::None, Action::None, Action::None, Action::None]
+            } else {
+                [
+                    Action::TaskView,    // top-left
+                    Action::ShowDesktop, // top-right
+                    Action::None,        // bottom-left
+                    Action::None,        // bottom-right
+                ]
+            },
             dwell_ms: 250,
             cooldown_ms: 700,
             corner_size: 8,
@@ -170,13 +205,30 @@ impl Default for Config {
             suppress_fullscreen: true,
             suppress_while_dragging: true,
             modifier: Modifier::None,
+            corner_keys: [Modifier::None; 4],
         }
     }
 }
 
 impl Config {
+    #[cfg(windows)]
     pub fn dir() -> Option<PathBuf> {
         std::env::var_os("APPDATA").map(|a| PathBuf::from(a).join("Cantos"))
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn dir() -> Option<PathBuf> {
+        std::env::var_os("HOME")
+            .map(|h| PathBuf::from(h).join("Library/Application Support/Cantos"))
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn dir() -> Option<PathBuf> {
+        let base = std::env::var_os("XDG_CONFIG_HOME")
+            .map(PathBuf::from)
+            .filter(|p| p.is_absolute())
+            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))?;
+        Some(base.join("cantos"))
     }
 
     pub fn path() -> Option<PathBuf> {
@@ -195,7 +247,7 @@ impl Config {
     ///
     /// `None` covers both "not there" and "could not be parsed". Callers that
     /// are reacting to a change on disk want to leave the running config
-    /// alone in either case — an editor caught mid-save must not reset
+    /// alone in either case: an editor caught mid-save must not reset
     /// anyone's settings.
     pub fn reload() -> Option<Self> {
         let text = std::fs::read_to_string(Self::path()?).ok()?;
@@ -205,7 +257,7 @@ impl Config {
     fn parse(text: &str) -> Result<Self, serde_json::Error> {
         // Strip a UTF-8 BOM. serde_json treats one as a syntax error, and
         // anyone who edits this file in Notepad or writes it from Windows
-        // PowerShell will have one — silently resetting their settings would
+        // PowerShell will have one, and silently resetting their settings would
         // be a baffling way to greet them.
         let text = text.strip_prefix('\u{feff}').unwrap_or(text);
         serde_json::from_str::<Config>(text).map(Config::sanitised)
@@ -245,7 +297,9 @@ impl Config {
     /// a half-written config behind.
     pub fn save(&self) -> std::io::Result<()> {
         let (Some(dir), Some(path)) = (Self::dir(), Self::path()) else {
-            return Err(std::io::Error::other("no APPDATA in environment"));
+            return Err(std::io::Error::other(
+                "no config directory in the environment",
+            ));
         };
         std::fs::create_dir_all(&dir)?;
         let json = serde_json::to_string_pretty(self)?;
@@ -261,6 +315,15 @@ impl Config {
         self.corner_size = self.corner_size.clamp(1, 200);
         self.dwell_ms = self.dwell_ms.min(5_000);
         self.cooldown_ms = self.cooldown_ms.clamp(100, 10_000);
+        // On a Mac this file only ever holds the corners Cantos fires itself.
+        // One the Dock can do belongs to the Dock; kept here as well, both
+        // would fire.
+        #[cfg(target_os = "macos")]
+        for a in self.corners.iter_mut() {
+            if crate::native::is_dock_action(a) {
+                *a = Action::None;
+            }
+        }
         self
     }
 }

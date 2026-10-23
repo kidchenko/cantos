@@ -10,7 +10,37 @@ Releases are tagged `vX.Y.Z`, which is what triggers the release workflow.
 
 Nothing yet.
 
-## [0.0.2] — 2026-09-12
+## [0.0.3] - 2026-10-23
+
+### Added
+
+- **macOS.** Cantos runs in the menu bar on macOS 11 and later, as one
+  universal `.dmg` for Apple silicon and Intel. There it is mostly a front
+  end for macOS's own hot corners: it reads them from the Dock, edits them
+  with the same actions and per-corner keys as System Settings, and keeps up
+  with changes made there, so those corners work even with Cantos quit. A
+  corner can instead take a Cantos action the Dock cannot do (Spotlight,
+  Finder, switching desktops, a custom command), which Cantos fires while it
+  runs. Run-at-login is a Login Item.
+- **Linux (X11).** Cantos runs in the tray on X11 desktops, from a tarball
+  that installs into `~/.local` without root. Corners can open the overview,
+  show the desktop, switch desktops, take a screenshot, open Files or
+  Settings, lock, start the screensaver, turn the display off, or run
+  anything. Wayland sessions are detected and explained, since Wayland does
+  not let an app read the cursor over other windows.
+- The settings window lists only the actions the platform it runs on can
+  perform, under that platform's names.
+
+### Changed
+
+- **The settings window is native** on every platform: AppKit on macOS,
+  Win32 on Windows, GTK on Linux, keeping the same design. It runs as its own
+  process, so closing it gives all of its memory back: about 12 MB for the
+  tray on a Mac afterwards, where the old window left around 50 MB behind.
+- **No more WebView2 or WebKit.** The web settings page is gone, so Windows no
+  longer needs the WebView2 runtime and Linux no longer needs WebKitGTK.
+
+## [0.0.2] - 2026-09-12
 
 ### Fixed
 
@@ -22,7 +52,7 @@ Nothing yet.
   Settings in `%APPDATA%\Cantos` are still kept on purpose, so reinstalling
   brings your corners back.
 
-## [0.0.1] — 2026-09-12
+## [0.0.1] - 2026-09-12
 
 First release. Everything below is new, so this entry describes the product
 rather than listing changes against a version nobody has.
@@ -35,7 +65,7 @@ rather than listing changes against a version nobody has.
 - Configurable **dwell** (250 ms default). A corner does not fire the instant
   you touch it, so overshooting toward a window's Close button is harmless.
 - **Cooldown and leaving.** After firing, a corner stays disarmed until both
-  the cooldown elapses and the cursor leaves it — otherwise parking the mouse
+  the cooldown elapses and the cursor leaves it; otherwise parking the mouse
   in a corner would repeat the action.
 - Optional **modifier key** requirement (Ctrl, Alt, Shift, or Win). Any
   modifier you are physically holding is released before the app synthesises
@@ -68,7 +98,7 @@ rather than listing changes against a version nobody has.
 - Settings live in `%APPDATA%\Cantos\config.json`, written via a temp file
   and rename. The file is watched, so a hand edit takes effect within a second
   rather than being ignored until restart and then overwritten.
-- Optional run-at-login via the per-user `Run` key — no scheduled task, no
+- Optional run-at-login via the per-user `Run` key: no scheduled task, no
   elevation, and visible in Task Manager's Startup tab.
 - Single instance: launching the app again surfaces the settings window.
 
@@ -91,6 +121,7 @@ rather than listing changes against a version nobody has.
   names the cause when it happens. See the README for the workarounds.
 - x64 only. Windows 10 or later.
 
-[Unreleased]: https://github.com/kidchenko/windows-cantos/compare/v0.0.2...HEAD
+[Unreleased]: https://github.com/kidchenko/windows-cantos/compare/v0.0.3...HEAD
+[0.0.3]: https://github.com/kidchenko/windows-cantos/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/kidchenko/windows-cantos/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/kidchenko/windows-cantos/releases/tag/v0.0.1

@@ -48,7 +48,7 @@ public class C {
 
 # Must happen before any coordinate call. Without it Windows virtualises this
 # process's cursor coordinates, so SetCursorPos lands somewhere other than
-# asked for on any scaled display — which is exactly what the app would see.
+# asked for on any scaled display, which is exactly what the app would see.
 $aware = [C]::SetProcessDpiAwarenessContext([IntPtr](-4))  # PER_MONITOR_AWARE_V2
 Write-Host ("DPI awareness set: {0}" -f $aware)
 

@@ -1,22 +1,23 @@
 //! The tray application: the icon, its menu, and the settings window.
 //!
 //! Everything here runs on the main thread, driven by the event loop in
-//! `main`. [`App`] owns the mutable state that outlives a single event — the
-//! tray handle and the settings window — so each event handler is a short
+//! `main`. [`App`] owns the mutable state that outlives a single event (the
+//! tray handle and the settings window), so each event handler is a short
 //! method rather than another branch of one long closure.
 
 use crate::config::Config;
+use crate::config::SharedConfig;
 use crate::log::{lerror, linfo};
 use crate::ui::page::{self, Msg};
 use crate::ui::{self, Settings};
-use crate::watcher::SharedConfig;
 use crate::{actions, autostart, log, util};
 
-use tao::event::{Event, WindowEvent};
+use tao::event::Event;
 use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
-use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
+use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem};
 use tray_icon::{Icon as TrayImage, MouseButton, TrayIcon, TrayIconBuilder, TrayIconEvent};
 
+#[cfg(not(target_os = "macos"))]
 const ICON_EDGE: u32 = 64;
 
 /// Everything that can wake the event loop.
@@ -27,6 +28,9 @@ pub enum UserEvent {
     Quit,
     /// `config.json` was edited outside the app and has been picked up.
     ConfigReloaded,
+    /// The native settings window's process ended. Carries the generation it
+    /// was opened as, so a window closing late cannot clear a newer one.
+    SettingsClosed(u64),
     /// A JSON message from the settings page.
     Ipc(String),
 }
@@ -44,10 +48,12 @@ pub struct App {
     tray: TrayIcon,
     /// The "Hot corners enabled" checkbox, kept in step with the config.
     enabled_item: CheckMenuItem,
-    /// `None` whenever the window is closed — and that is the point. Dropping
-    /// it tears down the WebView2 processes, which is what returns the app to
-    /// a few megabytes resident.
+    /// `None` whenever the window is closed, and that is the point: the
+    /// window is its own process, and closing it returns the app to a few
+    /// megabytes resident.
     settings: Option<Settings>,
+    /// Counts windows opened; see `UserEvent::SettingsClosed`.
+    settings_gen: u64,
 }
 
 impl App {
@@ -60,8 +66,11 @@ impl App {
         let quit_item = MenuItem::new("Quit Cantos", true, None);
 
         let menu = Menu::new();
+        // No pause on a Mac: the Dock fires the corners, and its settings are
+        // what Cantos edits there.
+        #[cfg(not(target_os = "macos"))]
+        let _ = menu.append(&enabled_item);
         let _ = menu.append_items(&[
-            &enabled_item,
             &settings_item,
             &PredefinedMenuItem::separator(),
             &log_item,
@@ -81,15 +90,17 @@ impl App {
         );
         forward_tray_events(&proxy);
 
-        let icon = TrayImage::from_rgba(ui::icon_rgba(), ICON_EDGE, ICON_EDGE)
-            .map_err(|e| format!("embedded tray icon is malformed: {e}"))?;
         let tray = TrayIconBuilder::new()
             .with_menu(Box::new(menu))
             .with_tooltip(tooltip(enabled))
-            // Right-click opens the menu; left-click is the primary action,
-            // which for this app means "show me the settings".
-            .with_menu_on_left_click(false)
-            .with_icon(icon)
+            .with_icon(tray_image(enabled)?)
+            // On a Mac the menu bar icon's job is its menu, as with every
+            // other one up there, and the glyph is a template that AppKit
+            // tints. Elsewhere right-click opens the menu and left-click is
+            // the primary action, which for this app means "show me the
+            // settings". (Linux's AppIndicator always shows the menu.)
+            .with_icon_as_template(cfg!(target_os = "macos"))
+            .with_menu_on_left_click(cfg!(target_os = "macos"))
             .build()
             .map_err(|e| format!("could not create the tray icon: {e}"))?;
 
@@ -99,13 +110,14 @@ impl App {
             tray,
             enabled_item,
             settings: None,
+            settings_gen: 0,
         })
     }
 
     pub fn handle(
         &mut self,
         event: Event<UserEvent>,
-        target: &EventLoopWindowTarget<UserEvent>,
+        _target: &EventLoopWindowTarget<UserEvent>,
     ) -> Flow {
         match event {
             Event::UserEvent(UserEvent::Quit) => {
@@ -115,15 +127,22 @@ impl App {
             }
             Event::UserEvent(UserEvent::OpenLog) => log::reveal(),
             Event::UserEvent(UserEvent::ToggleEnabled) => self.toggle_enabled(),
-            Event::UserEvent(UserEvent::OpenSettings) => self.open_settings(target),
+            Event::UserEvent(UserEvent::OpenSettings) => self.open_settings(),
+            Event::UserEvent(UserEvent::SettingsClosed(generation)) => {
+                if generation == self.settings_gen {
+                    linfo!("native settings window closed");
+                    self.settings = None;
+                }
+            }
             Event::UserEvent(UserEvent::ConfigReloaded) => self.sync_to_config(),
             Event::UserEvent(UserEvent::Ipc(body)) => self.handle_ipc(&body),
-            Event::WindowEvent {
-                event: WindowEvent::CloseRequested,
-                ..
-            } => {
-                linfo!("settings window closed; tearing down WebView2");
-                self.settings = None;
+            // macOS: opening Cantos.app again (Finder, Spotlight, `open`)
+            // does not start a second process, so the single-instance socket
+            // never hears about it. LaunchServices tells the running one
+            // instead; treat it like any other relaunch.
+            Event::Reopen { .. } => {
+                linfo!("reopened by LaunchServices; opening settings");
+                self.open_settings();
             }
             _ => {}
         }
@@ -141,26 +160,20 @@ impl App {
         self.refresh_page();
     }
 
-    fn open_settings(&mut self, target: &EventLoopWindowTarget<UserEvent>) {
-        // Already open: bring it forward rather than spawning a second
-        // WebView2 instance.
+    fn open_settings(&mut self) {
+        // Already open: bring it forward rather than opening a second one.
         if let Some(s) = &self.settings {
             linfo!("settings already open; raising it");
-            s.window.set_visible(true);
-            s.window.set_minimized(false);
-            s.window.set_focus();
+            s.raise();
             return;
         }
 
-        let proxy = self.proxy.clone();
-        match ui::build(target, move |body| {
-            let _ = proxy.send_event(UserEvent::Ipc(body));
-        }) {
+        self.settings_gen += 1;
+        match self.spawn_settings() {
             Ok(s) => {
                 linfo!("settings window opened");
                 self.settings = Some(s);
             }
-            // The likeliest cause by far is a missing WebView2 runtime.
             // Say so in a dialog as well as the log: this is the app's only
             // window, so a log-only failure just looks like being ignored.
             Err(e) => {
@@ -168,6 +181,21 @@ impl App {
                 ui::report_open_failure(&e);
             }
         }
+    }
+
+    /// Start the settings window's process; see `ui::child`.
+    fn spawn_settings(&self) -> Result<Settings, String> {
+        let (messages, closed) = (self.proxy.clone(), self.proxy.clone());
+        let generation = self.settings_gen;
+        ui::child::Child::spawn(
+            move |line| {
+                let _ = messages.send_event(UserEvent::Ipc(line));
+            },
+            move || {
+                let _ = closed.send_event(UserEvent::SettingsClosed(generation));
+            },
+        )
+        .map(Settings)
     }
 
     fn handle_ipc(&mut self, body: &str) {
@@ -187,7 +215,13 @@ impl App {
         }
 
         match msg {
-            Msg::Ready => self.refresh_page(),
+            Msg::Ready => {
+                self.refresh_page();
+                #[cfg(target_os = "linux")]
+                if let (Some(s), Some(why)) = (&self.settings, crate::x11::session_warning()) {
+                    page::toast(s, why, true);
+                }
+            }
             Msg::Set { config } => self.save_from_page(*config),
             Msg::Test { corner } => self.test_corner(corner),
             Msg::Reset => self.reset_to_defaults(),
@@ -198,12 +232,34 @@ impl App {
                 }
             }
             Msg::Autostart { value } => self.set_autostart(value),
+            #[cfg(target_os = "macos")]
+            Msg::Native { corners } => self.set_native(*corners),
         }
     }
 
-    /// The HKCU Run key is the only record of this; see the note on [`Config`].
-    /// On failure we report back what the registry actually says rather than
-    /// what was asked for, so the toggle cannot lie.
+    /// Write the corners to the Dock, then show the page what the Dock now
+    /// has, so a failed write cannot leave the page claiming otherwise.
+    #[cfg(target_os = "macos")]
+    fn set_native(&mut self, corners: [crate::native::NativeCorner; 4]) {
+        let result = match self.cfg.lock() {
+            Ok(mut c) => {
+                let r = crate::native::apply(&mut c, &corners);
+                let saved = c.save().map_err(|e| format!("could not save: {e}"));
+                r.and(saved)
+            }
+            Err(_) => Err("settings are unavailable".into()),
+        };
+        let Some(s) = &self.settings else { return };
+        page::push_state(s, &self.cfg);
+        match result {
+            Ok(()) => page::toast(s, "Saved", false),
+            Err(e) => page::toast(s, &e, true),
+        }
+    }
+
+    /// The OS is the only record of this; see the note on [`Config`]. On
+    /// failure we report back what the OS actually says rather than what was
+    /// asked for, so the toggle cannot lie.
     fn set_autostart(&self, value: bool) {
         let Some(s) = &self.settings else { return };
         match autostart::set(value) {
@@ -234,15 +290,23 @@ impl App {
     }
 
     fn test_corner(&self, corner: usize) {
-        let Some(action) = self
+        // On a Mac it is the Dock's action, or Cantos's own where the Dock has
+        // none.
+        #[cfg(target_os = "macos")]
+        let action = self.cfg.lock().ok().and_then(|c| {
+            crate::native::effective(&c)
+                .get(corner)
+                .map(|c| c.action.clone())
+        });
+        #[cfg(not(target_os = "macos"))]
+        let action = self
             .cfg
             .lock()
             .ok()
-            .and_then(|c| c.corners.get(corner).cloned())
-        else {
-            return;
-        };
-        actions::fire(action);
+            .and_then(|c| c.corners.get(corner).cloned());
+        if let Some(action) = action {
+            actions::fire(action);
+        }
     }
 
     fn reset_to_defaults(&mut self) {
@@ -264,6 +328,12 @@ impl App {
     /// Bring the tray and any open page back in line with the config, after
     /// something outside this app changed it.
     fn sync_to_config(&mut self) {
+        #[cfg(target_os = "macos")]
+        if let Ok(mut c) = self.cfg.lock() {
+            if crate::native::reconcile(&mut c) {
+                let _ = c.save();
+            }
+        }
         let enabled = self.cfg.lock().map(|c| c.enabled).unwrap_or(true);
         self.show_enabled(enabled);
         self.refresh_page();
@@ -285,17 +355,33 @@ impl App {
 
 fn tooltip(enabled: bool) -> &'static str {
     if enabled {
-        "Cantos — active"
+        "Cantos: active"
     } else {
-        "Cantos — paused"
+        "Cantos: paused"
     }
 }
 
+/// The template glyph on macOS, always lit since there is no pause there; the
+/// app's coloured mark elsewhere.
+fn tray_image(enabled: bool) -> Result<TrayImage, String> {
+    #[cfg(target_os = "macos")]
+    let (rgba, edge) = {
+        let _ = enabled;
+        (crate::icon::template(true), crate::icon::EDGE)
+    };
+    #[cfg(not(target_os = "macos"))]
+    let (rgba, edge) = {
+        let _ = enabled;
+        (ui::icon_rgba(), ICON_EDGE)
+    };
+    TrayImage::from_rgba(rgba, edge, edge).map_err(|e| format!("tray icon is malformed: {e}"))
+}
+
 struct MenuIds {
-    enabled: tray_icon::menu::MenuId,
-    settings: tray_icon::menu::MenuId,
-    log: tray_icon::menu::MenuId,
-    quit: tray_icon::menu::MenuId,
+    enabled: MenuId,
+    settings: MenuId,
+    log: MenuId,
+    quit: MenuId,
 }
 
 fn forward_menu_events(proxy: &EventLoopProxy<UserEvent>, ids: MenuIds) {

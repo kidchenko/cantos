@@ -1,7 +1,8 @@
-//! Minimal file logging to `%APPDATA%\Cantos\cantos.log`.
+//! Minimal file logging to `cantos.log`, next to `config.json`.
 //!
 //! Under `windows_subsystem = "windows"` there is no console, so `eprintln!`
-//! goes nowhere. Without a log, "my corner didn't fire" is unanswerable — the
+//! goes nowhere, and a macOS app bundle or a Linux autostart entry has no
+//! terminal either. Without a log, "my corner didn't fire" is unanswerable: the
 //! user cannot tell whether it was fullscreen suppression, the drag rule, a
 //! hitbox that does not cover where they pointed, or the app not running at
 //! all. Every one of those looks identical from the outside.
@@ -9,7 +10,7 @@
 //! Deliberately hand-rolled rather than pulling in `log` + a backend: this
 //! needs about sixty lines and the binary is a stated constraint.
 //!
-//! Volume is kept low enough to leave on permanently — the watcher polls 33
+//! Volume is kept low enough to leave on permanently: the watcher polls 33
 //! times a second but only *outcomes* are recorded, never ticks. Set
 //! `CANTOS_LOG=debug` for the chatty per-transition detail.
 
@@ -18,9 +19,6 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
-
-use windows::Win32::Foundation::SYSTEMTIME;
-use windows::Win32::System::SystemInformation::GetLocalTime;
 
 static SINK: Mutex<Option<File>> = Mutex::new(None);
 static DEBUG: AtomicBool = AtomicBool::new(false);
@@ -64,18 +62,46 @@ pub fn init() {
     }
 }
 
+/// Local wall-clock time, to the millisecond. Local rather than UTC because
+/// the log is read by a human next to a clock on the same wall.
+#[cfg(windows)]
 fn stamp() -> String {
-    let t: SYSTEMTIME = unsafe { GetLocalTime() };
+    use windows::Win32::System::SystemInformation::GetLocalTime;
+    let t = unsafe { GetLocalTime() };
     format!(
         "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:03}",
         t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond, t.wMilliseconds
     )
 }
 
+#[cfg(unix)]
+fn stamp() -> String {
+    let dur = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default();
+    let secs = dur.as_secs() as libc::time_t;
+    // localtime_r turns the UTC time_t into the process's local calendar time,
+    // honouring the current zone and DST without pulling in a date crate.
+    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+    unsafe {
+        libc::localtime_r(&secs, &mut tm);
+    }
+    format!(
+        "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:03}",
+        tm.tm_year + 1900,
+        tm.tm_mon + 1,
+        tm.tm_mday,
+        tm.tm_hour,
+        tm.tm_min,
+        tm.tm_sec,
+        dur.subsec_millis()
+    )
+}
+
 pub fn write(level: &str, msg: &str) {
     // Formatted up front so the line reaches the file in a single write.
     // `writeln!` against a `File` issues one write per format fragment, and
-    // every instance has this file open in append mode at once — so a second
+    // every instance has this file open in append mode at once, so a second
     // launch signalling the first used to interleave mid-line, which is
     // precisely the moment the log is worth reading. Building the string
     // before taking the lock also keeps the critical section to the write.
@@ -104,7 +130,8 @@ macro_rules! ldebug {
 
 pub(crate) use {ldebug, lerror, linfo, lwarn};
 
-/// Open the log in whatever handles .log (Notepad by default). Exposed on the
+/// Open the log in whatever handles .log (Notepad on Windows, Console on a
+/// Mac, the text editor on Linux). Exposed on the
 /// tray menu because when the settings window is the thing that will not
 /// open, the tray is the only surface the user has left.
 pub fn reveal() {

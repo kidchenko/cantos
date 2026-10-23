@@ -3,7 +3,7 @@
 //!
 //! This is the difference between an action that works and one that silently
 //! does nothing. Synthetic input aimed at a window owned by a higher
-//! integrity process is discarded by Windows without an error — so with a
+//! integrity process is discarded by Windows without an error, so with a
 //! terminal or Task Manager running as administrator in the foreground,
 //! `SendInput` is simply thrown away.
 //!
@@ -44,7 +44,7 @@ pub fn window_switcher() -> bool {
     dispatch().is_some_and(|d| unsafe { d.WindowSwitcher().is_ok() })
 }
 
-/// Win+D's equivalent — a toggle, exactly like the shortcut.
+/// Win+D's equivalent: a toggle, exactly like the shortcut.
 pub fn toggle_desktop() -> bool {
     dispatch().is_some_and(|d| unsafe { d.ToggleDesktop().is_ok() })
 }

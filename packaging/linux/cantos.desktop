@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Cantos
+GenericName=Hot corners
+Comment=Throw the cursor into a corner of the screen and something happens
+Exec=cantos --settings
+Icon=cantos
+Terminal=false
+Categories=Utility;
+Keywords=hot corners;corners;mouse;
+StartupNotify=false
