@@ -8,7 +8,7 @@
   #define AppVersion "0.0.3"
 #endif
 #define AppPublisher "kidchenko"
-#define AppURL     "https://github.com/kidchenko/windows-cantos"
+#define AppURL     "https://github.com/kidchenko/cantos"
 #define AppExe     "cantos.exe"
 
 [Setup]

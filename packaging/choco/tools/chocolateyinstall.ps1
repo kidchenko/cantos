@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $version  = '0.0.3'
-$url      = "https://github.com/kidchenko/windows-cantos/releases/download/v$version/Cantos-Setup-$version.exe"
+$url      = "https://github.com/kidchenko/cantos/releases/download/v$version/Cantos-Setup-$version.exe"
 
 $packageArgs = @{
   packageName    = 'cantos'

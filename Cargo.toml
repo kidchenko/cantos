@@ -6,7 +6,7 @@ rust-version = "1.77"
 description  = "Hot corners for Windows, macOS and Linux"
 authors      = ["kidchenko <kidchenko@gmail.com>"]
 license      = "MIT"
-repository   = "https://github.com/kidchenko/windows-cantos"
+repository   = "https://github.com/kidchenko/cantos"
 
 [[bin]]
 name = "cantos"

@@ -24,9 +24,12 @@ the menu bar) using about 2 MB and no measurable CPU.
 winget install kidchenko.Cantos
 # or
 choco install cantos
+# or
+scoop bucket add kidchenko https://github.com/kidchenko/scoop-bucket
+scoop install kidchenko/cantos
 ```
 
-Or download from [Releases](https://github.com/kidchenko/windows-cantos/releases):
+Or download from [Releases](https://github.com/kidchenko/cantos/releases):
 `Cantos-Setup-<version>.exe` to install, or `cantos-<version>-x64.exe` to run
 without installing.
 
@@ -36,7 +39,7 @@ The binary is not code-signed, so SmartScreen warns on first run. Click
 ### macOS
 
 Download `Cantos-<version>.dmg` from
-[Releases](https://github.com/kidchenko/windows-cantos/releases) and drag
+[Releases](https://github.com/kidchenko/cantos/releases) and drag
 Cantos to Applications. One universal build for Apple silicon and Intel,
 macOS 11 or later.
 
@@ -55,7 +58,7 @@ Cantos's own actions, which the Dock cannot do; see [Actions](#actions).
 ### Linux
 
 Download `cantos-<version>-linux-x86_64.tar.gz` from
-[Releases](https://github.com/kidchenko/windows-cantos/releases), then:
+[Releases](https://github.com/kidchenko/cantos/releases), then:
 
 ```sh
 tar xzf cantos-*-linux-x86_64.tar.gz

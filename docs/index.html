@@ -9,7 +9,7 @@
 
 <meta property="og:title" content="Cantos: macOS-style hot corners for Windows">
 <meta property="og:description" content="Throw the cursor into a corner of the screen and something happens.">
-<meta property="og:image" content="https://josebarbosa.dev/windows-cantos/img/icon-256.png">
+<meta property="og:image" content="https://josebarbosa.dev/cantos/img/icon-256.png">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary">
 
@@ -204,13 +204,13 @@
 
     <div class="cta">
       <a class="download" id="download"
-         href="https://github.com/kidchenko/windows-cantos/releases/latest">
+         href="https://github.com/kidchenko/cantos/releases/latest">
         Download for Windows
       </a>
       <div class="alt">
-        <a href="https://github.com/kidchenko/windows-cantos">Source</a>
-        <a href="https://github.com/kidchenko/windows-cantos/releases">Releases</a>
-        <a href="https://github.com/kidchenko/windows-cantos/issues">Support</a>
+        <a href="https://github.com/kidchenko/cantos">Source</a>
+        <a href="https://github.com/kidchenko/cantos/releases">Releases</a>
+        <a href="https://github.com/kidchenko/cantos/issues">Support</a>
       </div>
       <p class="req" id="req">Windows 10 or later · x64 · free and open source</p>
     </div>
@@ -347,7 +347,7 @@
       <details>
         <summary>Is it really free?</summary>
         <div><p>Yes. MIT licensed, and the source is on
-        <a href="https://github.com/kidchenko/windows-cantos">GitHub</a>.</p></div>
+        <a href="https://github.com/kidchenko/cantos">GitHub</a>.</p></div>
       </details>
     </section>
 
@@ -355,7 +355,7 @@
 
   <footer>
     <p>MIT licensed · by <a href="https://github.com/kidchenko">kidchenko</a> ·
-      <a href="https://github.com/kidchenko/windows-cantos">source on GitHub</a></p>
+      <a href="https://github.com/kidchenko/cantos">source on GitHub</a></p>
     <p><i>canto</i> is Portuguese for <i>corner</i></p>
   </footer>
 
@@ -369,7 +369,7 @@
   const btn = document.getElementById('download');
   const req = document.getElementById('req');
   try {
-    const r = await fetch('https://api.github.com/repos/kidchenko/windows-cantos/releases/latest');
+    const r = await fetch('https://api.github.com/repos/kidchenko/cantos/releases/latest');
     if (!r.ok) return;
     const rel = await r.json();
     const setup = rel.assets.find(a => /Setup.*\.exe$/i.test(a.name));

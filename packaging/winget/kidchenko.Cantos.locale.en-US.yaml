@@ -4,11 +4,11 @@ PackageVersion: 0.0.3
 PackageLocale: en-US
 Publisher: kidchenko
 PublisherUrl: https://github.com/kidchenko
-PublisherSupportUrl: https://github.com/kidchenko/windows-cantos/issues
+PublisherSupportUrl: https://github.com/kidchenko/cantos/issues
 PackageName: Cantos
-PackageUrl: https://github.com/kidchenko/windows-cantos
+PackageUrl: https://github.com/kidchenko/cantos
 License: MIT
-LicenseUrl: https://github.com/kidchenko/windows-cantos/blob/main/LICENSE
+LicenseUrl: https://github.com/kidchenko/cantos/blob/main/LICENSE
 Copyright: Copyright (c) 2026 kidchenko
 ShortDescription: macOS-style hot corners for Windows
 Description: |-
@@ -27,6 +27,6 @@ Tags:
   - productivity
   - tray
   - utilities
-ReleaseNotesUrl: https://github.com/kidchenko/windows-cantos/releases
+ReleaseNotesUrl: https://github.com/kidchenko/cantos/releases
 ManifestType: defaultLocale
 ManifestVersion: 1.6.0

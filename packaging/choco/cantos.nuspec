@@ -3,16 +3,16 @@
   <metadata>
     <id>cantos</id>
     <version>0.0.3</version>
-    <packageSourceUrl>https://github.com/kidchenko/windows-cantos/tree/main/packaging/choco</packageSourceUrl>
+    <packageSourceUrl>https://github.com/kidchenko/cantos/tree/main/packaging/choco</packageSourceUrl>
     <owners>kidchenko</owners>
     <title>Cantos</title>
     <authors>kidchenko</authors>
-    <projectUrl>https://github.com/kidchenko/windows-cantos</projectUrl>
-    <iconUrl>https://raw.githubusercontent.com/kidchenko/windows-cantos/main/assets/icon-256.png</iconUrl>
-    <licenseUrl>https://github.com/kidchenko/windows-cantos/blob/main/LICENSE</licenseUrl>
+    <projectUrl>https://github.com/kidchenko/cantos</projectUrl>
+    <iconUrl>https://raw.githubusercontent.com/kidchenko/cantos/main/assets/icon-256.png</iconUrl>
+    <licenseUrl>https://github.com/kidchenko/cantos/blob/main/LICENSE</licenseUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
-    <projectSourceUrl>https://github.com/kidchenko/windows-cantos</projectSourceUrl>
-    <bugTrackerUrl>https://github.com/kidchenko/windows-cantos/issues</bugTrackerUrl>
+    <projectSourceUrl>https://github.com/kidchenko/cantos</projectSourceUrl>
+    <bugTrackerUrl>https://github.com/kidchenko/cantos/issues</bugTrackerUrl>
     <tags>cantos hot-corners macos productivity tray windows admin</tags>
     <summary>macOS-style hot corners for Windows</summary>
     <description><![CDATA[
@@ -28,7 +28,7 @@ using about 2 MB and effectively no CPU.
 * Multi-monitor aware, with outer-corners, per-screen, and primary-only modes.
 * Optional modifier key requirement.
 ]]></description>
-    <releaseNotes>https://github.com/kidchenko/windows-cantos/releases</releaseNotes>
+    <releaseNotes>https://github.com/kidchenko/cantos/releases</releaseNotes>
   </metadata>
   <files>
     <file src="tools\**" target="tools" />

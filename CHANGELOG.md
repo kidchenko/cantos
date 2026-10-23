@@ -121,7 +121,7 @@ rather than listing changes against a version nobody has.
   names the cause when it happens. See the README for the workarounds.
 - x64 only. Windows 10 or later.
 
-[Unreleased]: https://github.com/kidchenko/windows-cantos/compare/v0.0.3...HEAD
-[0.0.3]: https://github.com/kidchenko/windows-cantos/compare/v0.0.2...v0.0.3
-[0.0.2]: https://github.com/kidchenko/windows-cantos/compare/v0.0.1...v0.0.2
-[0.0.1]: https://github.com/kidchenko/windows-cantos/releases/tag/v0.0.1
+[Unreleased]: https://github.com/kidchenko/cantos/compare/v0.0.3...HEAD
+[0.0.3]: https://github.com/kidchenko/cantos/compare/v0.0.2...v0.0.3
+[0.0.2]: https://github.com/kidchenko/cantos/compare/v0.0.1...v0.0.2
+[0.0.1]: https://github.com/kidchenko/cantos/releases/tag/v0.0.1
