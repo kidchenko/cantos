@@ -8,7 +8,11 @@ Releases are tagged `vX.Y.Z`, which is what triggers the release workflow.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **Check for updates…** in the tray menu opens the Cantos page with the
+  installed version, and the page says whether a newer release is out. Cantos
+  itself still never touches the network.
 
 ## [0.0.3] - 2026-10-23
 

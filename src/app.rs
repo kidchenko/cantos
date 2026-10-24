@@ -24,6 +24,7 @@ const ICON_EDGE: u32 = 64;
 pub enum UserEvent {
     OpenSettings,
     OpenLog,
+    CheckForUpdates,
     ToggleEnabled,
     Quit,
     /// `config.json` was edited outside the app and has been picked up.
@@ -63,6 +64,7 @@ impl App {
         let enabled_item = CheckMenuItem::new("Hot corners enabled", true, enabled, None);
         let settings_item = MenuItem::new("Settings\u{2026}", true, None);
         let log_item = MenuItem::new("Open log", true, None);
+        let update_item = MenuItem::new("Check for updates\u{2026}", true, None);
         let quit_item = MenuItem::new("Quit Cantos", true, None);
 
         let menu = Menu::new();
@@ -74,6 +76,7 @@ impl App {
             &settings_item,
             &PredefinedMenuItem::separator(),
             &log_item,
+            &update_item,
             &quit_item,
         ]);
 
@@ -85,6 +88,7 @@ impl App {
                 enabled: enabled_item.id().clone(),
                 settings: settings_item.id().clone(),
                 log: log_item.id().clone(),
+                update: update_item.id().clone(),
                 quit: quit_item.id().clone(),
             },
         );
@@ -126,6 +130,7 @@ impl App {
                 return Flow::Exit;
             }
             Event::UserEvent(UserEvent::OpenLog) => log::reveal(),
+            Event::UserEvent(UserEvent::CheckForUpdates) => check_for_updates(),
             Event::UserEvent(UserEvent::ToggleEnabled) => self.toggle_enabled(),
             Event::UserEvent(UserEvent::OpenSettings) => self.open_settings(),
             Event::UserEvent(UserEvent::SettingsClosed(generation)) => {
@@ -377,10 +382,20 @@ fn tray_image(enabled: bool) -> Result<TrayImage, String> {
     TrayImage::from_rgba(rgba, edge, edge).map_err(|e| format!("tray icon is malformed: {e}"))
 }
 
+/// Cantos never touches the network itself. The project page compares the
+/// version it is handed with the latest GitHub release and says what to do.
+fn check_for_updates() {
+    util::shell_open(concat!(
+        "https://josebarbosa.dev/cantos/?v=",
+        env!("CARGO_PKG_VERSION")
+    ));
+}
+
 struct MenuIds {
     enabled: MenuId,
     settings: MenuId,
     log: MenuId,
+    update: MenuId,
     quit: MenuId,
 }
 
@@ -393,6 +408,8 @@ fn forward_menu_events(proxy: &EventLoopProxy<UserEvent>, ids: MenuIds) {
             UserEvent::OpenSettings
         } else if e.id == ids.log {
             UserEvent::OpenLog
+        } else if e.id == ids.update {
+            UserEvent::CheckForUpdates
         } else if e.id == ids.quit {
             UserEvent::Quit
         } else {

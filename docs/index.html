@@ -102,6 +102,38 @@
 
   .req { margin-top: 34px; font-size: .875rem; color: var(--faint); }
 
+  /* Shown only when the app's "Check for updates…" opened this page. */
+  .update {
+    margin: 0 auto 40px;
+    max-width: 34rem;
+    padding: 14px 18px;
+    background: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-size: .95rem;
+    color: var(--dim);
+  }
+  .update[data-state="new"] { border-color: var(--accent); }
+  .update[data-state="new"] strong { color: var(--accent); font-weight: 600; }
+  .update code { color: var(--text); }
+  /* Linux has no package manager command to offer, so that clause goes. */
+  .for-mac-inline, .os-mac .for-win-inline, .os-linux .not-linux-inline { display: none; }
+  .os-mac .for-mac-inline { display: inline; }
+
+  .copy {
+    margin-left: 6px;
+    padding: 1px 8px;
+    background: var(--raised);
+    color: var(--dim);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    font: .78rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    cursor: pointer;
+    vertical-align: 1px;
+  }
+  .copy:hover { color: var(--accent); }
+  .copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
   /* ------------------------------------------------------------- shot */
   figure { margin: 64px 0 0; }
   figure img, figure video {
@@ -184,6 +216,19 @@
   details > div p:last-child { margin-bottom: 0; }
 
   /* --------------------------------------------------------------- footer */
+  /* ------------------------------------------------------------ more apps */
+  .apps {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px 28px;
+  }
+  .apps li { display: flex; gap: 12px; align-items: flex-start; color: var(--dim); font-size: .95rem; }
+  .apps img { width: 32px; height: 32px; flex: none; margin-top: 2px; }
+  .apps a { display: block; font-weight: 600; }
+
   footer {
     margin-top: 96px;
     padding: 32px 0 56px;
@@ -199,6 +244,7 @@
     header { padding-top: 56px; }
     header img { width: 104px; height: 104px; }
     section { margin-top: 58px; }
+    .apps { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -207,6 +253,7 @@
 <div class="wrap">
 
   <header>
+    <div class="update" id="update" role="status" hidden></div>
     <img src="img/icon.svg" alt="" width="132" height="132">
     <h1>Cantos</h1>
     <p class="tagline">Hot corners for Windows, macOS and Linux</p>
@@ -215,8 +262,8 @@
       <a class="download ghost dl-mac" href="https://github.com/kidchenko/cantos/releases/latest/download/Cantos.dmg">Download for macOS</a>
       <a class="download ghost dl-linux" id="dl-linux" href="https://github.com/kidchenko/cantos/releases/latest">Download for Linux</a>
     </div>
-    <p class="req for-win">or <code>scoop install kidchenko/cantos</code> · Windows 10 or later · x64</p>
-    <p class="req for-mac">or <code>brew install --cask kidchenko/tap/cantos</code> · macOS 11 or later · Apple silicon and Intel</p>
+    <p class="req for-win">or <code data-copy>scoop install kidchenko/cantos</code> · Windows 10 or later · x64</p>
+    <p class="req for-mac">or <code data-copy>brew install --cask kidchenko/tap/cantos</code> · macOS 11 or later · Apple silicon and Intel</p>
     <p class="req for-linux">x86_64 · X11 session · GTK 3 and AppIndicator</p>
     <div class="alt">
       <a href="https://github.com/kidchenko/cantos">Source</a>
@@ -289,8 +336,10 @@
 
     <section>
       <h2>Privacy</h2>
-      <p>Cantos makes no network requests. There is no telemetry, no update
-      check, no account, and nothing is ever uploaded. The dependency tree
+      <p>Cantos makes no network requests. There is no telemetry, no account,
+      and nothing is ever uploaded. Check for updates in the menu opens this
+      page in your browser, which asks GitHub for the latest version; the app
+      itself never does. The dependency tree
       contains no HTTP client at all, and the settings window is native (Win32,
         AppKit or GTK) and loads nothing from the internet.</p>
       <p>Your settings are a single JSON file in <code>%APPDATA%\Cantos</code>
@@ -387,11 +436,30 @@
       </details>
     </section>
 
+    <section>
+      <h2>More small tray apps</h2>
+      <ul class="apps">
+        <li><img src="https://josebarbosa.dev/cafe/img/icon-256.png" alt="" width="32" height="32">
+          <span><a href="https://josebarbosa.dev/cafe/">Cafe</a>Keeps your Mac or PC awake, from the tray.</span></li>
+        <li><img src="https://josebarbosa.dev/cota/img/icon-256.png" alt="" width="32" height="32">
+          <span><a href="https://josebarbosa.dev/cota/">Cota</a>Your Claude usage limits, in the tray.</span></li>
+        <li><img src="https://josebarbosa.dev/luz/img/icon-256.png" alt="" width="32" height="32">
+          <span><a href="https://josebarbosa.dev/luz/">Luz</a>Warms your screen at night, like f.lux.</span></li>
+        <li><img src="https://josebarbosa.dev/porta/img/icon-256.png" alt="" width="32" height="32">
+          <span><a href="https://josebarbosa.dev/porta/">Porta</a>What&rsquo;s listening on your ports, and a way to stop it.</span></li>
+        <li><img src="https://josebarbosa.dev/sonus/img/icon-256.png" alt="" width="32" height="32">
+          <span><a href="https://josebarbosa.dev/sonus/">Sonus</a>A volume slider for every app.</span></li>
+        <li><img src="https://josebarbosa.dev/suavez/img/icon-256.png" alt="" width="32" height="32">
+          <span><a href="https://josebarbosa.dev/suavez/">Sua Vez</a>Lights up when your coding agent finishes or needs you.</span></li>
+      </ul>
+    </section>
+
   </main>
 
   <footer>
     <p>MIT licensed · by <a href="https://github.com/kidchenko">kidchenko</a> ·
-      <a href="https://github.com/kidchenko/cantos">source on GitHub</a></p>
+      <a href="https://github.com/kidchenko/cantos">source on GitHub</a> ·
+      <a href="https://josebarbosa.dev/portfolio/">All apps</a></p>
     <p><i>canto</i> is Portuguese for <i>corner</i></p>
   </footer>
 
@@ -404,6 +472,70 @@
       if (/mac/i.test(p)) document.body.classList.add('os-mac');
       else if (/linux/i.test(p) && !/android/i.test(navigator.userAgent)) document.body.classList.add('os-linux');
     } catch (e) {}
+
+    // Opened from the app's "Check for updates…" menu item as ?v=<installed>.
+    // The app never touches the network; this page asks GitHub instead.
+    (function () {
+      var have = new URLSearchParams(location.search).get("v");
+      if (!have || !/^\d+(\.\d+){0,3}$/.test(have)) return;
+      var box = document.getElementById("update");
+      function cmp(a, b) {
+        a = a.split("."); b = b.split(".");
+        for (var i = 0; i < Math.max(a.length, b.length); i++) {
+          var d = (+a[i] || 0) - (+b[i] || 0);
+          if (d) return d;
+        }
+        return 0;
+      }
+      function show(html, state) {
+        box.innerHTML = html;
+        box.setAttribute("data-state", state);
+        box.hidden = false;
+      }
+      fetch("https://api.github.com/repos/kidchenko/cantos/releases/latest")
+        .then(function (r) { if (!r.ok) throw r.status; return r.json(); })
+        .then(function (rel) {
+          var latest = String(rel.tag_name || "").replace(/^v/, "");
+          if (!/^\d+(\.\d+){0,3}$/.test(latest)) throw "tag";
+          if (cmp(latest, have) > 0) {
+            show("<strong>Cantos " + latest + " is out.</strong> You have " + have + ". " +
+                 "Download it below" +
+                 "<span class=\"not-linux-inline\">, or run " +
+                 "<code class=\"for-mac-inline\">brew upgrade --cask kidchenko/tap/cantos</code>" +
+                 "<code class=\"for-win-inline\">scoop update cantos</code> if you installed it that way</span>.", "new");
+          } else {
+            show("You have the latest version of Cantos (" + have + ").", "current");
+          }
+        })
+        .catch(function () {
+          show("Could not reach GitHub to check. You have " + have + ". " +
+               "<a href=\"https://github.com/kidchenko/cantos/releases\">See all releases</a>.", "error");
+        });
+    })();
+
+    // A Copy button after every install command. Without clipboard access
+    // (plain http, older browsers) it selects the command instead.
+    document.querySelectorAll('code[data-copy]').forEach(code => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'copy';
+      btn.textContent = 'Copy';
+      btn.addEventListener('click', () => {
+        const select = () => {
+          const range = document.createRange();
+          range.selectNodeContents(code);
+          const sel = getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+        };
+        if (!navigator.clipboard) return select();
+        navigator.clipboard.writeText(code.textContent).then(() => {
+          btn.textContent = 'Copied';
+          setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+        }, select);
+      });
+      code.after(btn);
+    });
 
     // Point the Windows and Linux buttons at the current release's files, read
     // live from GitHub: their names carry the version, so a new release needs
