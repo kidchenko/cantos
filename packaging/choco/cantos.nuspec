@@ -7,8 +7,9 @@
     <owners>kidchenko</owners>
     <title>Cantos</title>
     <authors>kidchenko</authors>
+    <copyright>Copyright (c) 2026 kidchenko</copyright>
     <projectUrl>https://github.com/kidchenko/cantos</projectUrl>
-    <iconUrl>https://raw.githubusercontent.com/kidchenko/cantos/main/assets/icon-256.png</iconUrl>
+    <iconUrl>https://cdn.jsdelivr.net/gh/kidchenko/cantos@0bdb55e6aa90778ad2830bac737c51b8edeaef2c/assets/icon-256.png</iconUrl>
     <licenseUrl>https://github.com/kidchenko/cantos/blob/main/LICENSE</licenseUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <projectSourceUrl>https://github.com/kidchenko/cantos</projectSourceUrl>
