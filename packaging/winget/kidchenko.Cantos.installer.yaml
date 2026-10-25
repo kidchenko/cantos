@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
 PackageIdentifier: kidchenko.Cantos
-PackageVersion: 0.0.3
+PackageVersion: 0.0.4
 InstallerType: inno
 Scope: machine
 InstallModes:
@@ -12,7 +12,7 @@ ProductCode: '{7B1F4C2E-9A3D-4E58-B6C1-2F8A5D0E7341}_is1'
 ReleaseDate: 2026-09-08
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/kidchenko/cantos/releases/download/v0.0.3/Cantos-Setup-0.0.3.exe
+    InstallerUrl: https://github.com/kidchenko/cantos/releases/download/v0.0.4/Cantos-Setup-0.0.4.exe
     # Filled in by the release workflow from the built artifact.
     InstallerSha256: REPLACE_WITH_SHA256
 ManifestType: installer

@@ -8,6 +8,8 @@ Releases are tagged `vX.Y.Z`, which is what triggers the release workflow.
 
 ## [Unreleased]
 
+## [0.0.4] - 2026-10-25
+
 ### Added
 
 - **Check for updates…** in the tray menu opens the Cantos page with the
@@ -146,7 +148,8 @@ rather than listing changes against a version nobody has.
   names the cause when it happens. See the README for the workarounds.
 - x64 only. Windows 10 or later.
 
-[Unreleased]: https://github.com/kidchenko/cantos/compare/v0.0.3...HEAD
+[Unreleased]: https://github.com/kidchenko/cantos/compare/v0.0.4...HEAD
+[0.0.4]: https://github.com/kidchenko/cantos/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/kidchenko/cantos/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/kidchenko/cantos/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/kidchenko/cantos/releases/tag/v0.0.1
