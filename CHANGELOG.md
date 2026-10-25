@@ -13,6 +13,27 @@ Releases are tagged `vX.Y.Z`, which is what triggers the release workflow.
 - **Check for updates…** in the tray menu opens the Cantos page with the
   installed version, and the page says whether a newer release is out. Cantos
   itself still never touches the network.
+- **macOS:** the settings window has the *Multiple displays* choice the other
+  platforms have (Outer corners, Every screen, Primary only), for Cantos's own
+  corners. Outer corners stays the default.
+
+### Fixed
+
+- On L-shaped arrangements, such as a laptop below a wider monitor, an outer
+  corner that sat on no display was dropped, so a Cantos action put there
+  never fired. It now moves to the nearest real screen corner, and the
+  settings diagram draws each corner where it actually is.
+- **macOS:** the Accessibility permission for Spotlight, Emoji & Symbols and
+  the desktop-switching actions is asked for when one is put on a corner (or
+  at launch, if one already is), not when the corner first fires. A corner
+  fired without it now only logs why, instead of prompting every time.
+- **macOS:** Previous desktop and Next desktop did nothing. The arrow key
+  they press now carries the Fn and keypad flags a real arrow key has, which
+  Mission Control's shortcuts require.
+- **macOS:** `build.sh` clears the stale Accessibility entry when an ad-hoc
+  build changes, which otherwise stays switched on in System Settings while
+  macOS ignores it. `CANTOS_SIGN_IDENTITY` signs with a certificate instead,
+  so the permission survives rebuilds.
 
 ## [0.0.3] - 2026-10-23
 

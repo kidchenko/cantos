@@ -105,8 +105,9 @@ The first section is the Dock's own: Cantos writes the corner into the Dock's
 settings and the Dock fires it. A Cantos action clears that corner in the
 Dock and Cantos fires it itself, so nothing ever fires twice; its card in the
 settings window is tagged CANTOS. The actions with a shortcut beside them
-press it, which macOS only allows with the **Accessibility** permission: the
-first time one fires, macOS asks. macOS fires its own corners at the outer
+press it, which macOS only allows with the **Accessibility** permission:
+macOS asks when you put one on a corner, or at launch if one is already set
+and the permission is missing. macOS fires its own corners at the outer
 corners of the whole display arrangement, and Cantos does the same.
 
 Saving a change restarts the Dock, because the Dock only reads these
@@ -148,8 +149,10 @@ Windows and Linux:
 
 **Multiple monitors.** Three modes: *Outer* (the four corners of the whole
 desktop, default), *Every screen*, or *Primary only*. On L-shaped layouts an
-outer corner that isn't on any physical display is dropped rather than
-published as a corner that can never fire.
+outer corner that isn't on any physical display moves to the nearest real
+screen corner, so a laptop under a wider monitor still has its bottom corners.
+On a Mac the mode applies to Cantos's own corners; the Dock's work as macOS
+has them.
 
 Settings live in `config.json`. Edit it by hand if you like; changes apply
 within a second, no restart. On a Mac the corners are not in it: they stay in
@@ -237,6 +240,12 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ./build.sh --run         # ...then launch it
 ./build.sh --universal --dmg   # macOS: arm64 + x86_64 in one .app, in a .dmg
 ```
+
+On a Mac, an ad-hoc signed build loses the Accessibility permission every
+time the binary changes, so `build.sh` clears the stale entry and macOS asks
+again. To keep it across rebuilds, sign with a certificate:
+`CANTOS_SIGN_IDENTITY="Apple Development: you@example.com (TEAMID)" ./build.sh`
+(`security find-identity -v -p codesigning` lists yours).
 
 On Linux, first install the GTK and AppIndicator headers:
 

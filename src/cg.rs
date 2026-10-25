@@ -44,6 +44,10 @@ pub const FLAG_SHIFT: u64 = 1 << 17;
 pub const FLAG_CONTROL: u64 = 1 << 18;
 pub const FLAG_OPTION: u64 = 1 << 19;
 pub const FLAG_COMMAND: u64 = 1 << 20;
+/// `kCGEventFlagMaskNumericPad` and `kCGEventFlagMaskSecondaryFn`: a real
+/// arrow key press carries both.
+pub const FLAG_NUMERIC_PAD: u64 = 1 << 21;
+pub const FLAG_FN: u64 = 1 << 23;
 
 /// `kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements`.
 pub const ON_SCREEN_WINDOWS: u32 = 1 | 16;

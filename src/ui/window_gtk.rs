@@ -301,6 +301,10 @@ struct DisplayView {
 #[derive(Deserialize, Default, Clone)]
 struct HitboxView {
     corner: String,
+    left: i32,
+    top: i32,
+    right: i32,
+    bottom: i32,
 }
 
 struct Ui {
@@ -1146,15 +1150,16 @@ fn draw_diagram(cr: &gtk::cairo::Context, width: f64, height: f64) {
 
     let corners = config().corners;
     let hovered = HOVERED.with(|h| h.get());
-    let (r_, b_) = (l + w, top + h);
-    for (i, (x, y)) in [(l, top), (r_, top), (l, b_), (r_, b_)]
-        .into_iter()
-        .enumerate()
-    {
-        if !state.hitboxes.iter().any(|hb| hb.corner == CORNER_KEYS[i]) {
+    for hb in &state.hitboxes {
+        let Some(i) = CORNER_KEYS.iter().position(|k| *k == hb.corner) else {
             continue;
-        }
-        let (px, py) = map(x, y);
+        };
+        // Anchored on the hitbox's outermost edge: the bracket sits exactly
+        // where the cursor has to reach, which on an L-shaped arrangement
+        // is not always a corner of the whole.
+        let x = if i % 2 == 0 { hb.left } else { hb.right };
+        let y = if i < 2 { hb.top } else { hb.bottom };
+        let (px, py) = map(x as f64, y as f64);
         let (dx, dy) = (
             if i % 2 == 0 { 1.0 } else { -1.0 },
             if i < 2 { 1.0 } else { -1.0 },

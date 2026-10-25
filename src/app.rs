@@ -239,6 +239,26 @@ impl App {
             Msg::Autostart { value } => self.set_autostart(value),
             #[cfg(target_os = "macos")]
             Msg::Native { corners } => self.set_native(*corners),
+            #[cfg(target_os = "macos")]
+            Msg::MonitorMode { mode } => self.set_monitor_mode(mode),
+        }
+    }
+
+    /// The watcher reads the mode every tick, so saving it is all it takes.
+    #[cfg(target_os = "macos")]
+    fn set_monitor_mode(&mut self, mode: crate::config::MonitorMode) {
+        let saved = match self.cfg.lock() {
+            Ok(mut c) => {
+                c.monitor_mode = mode;
+                c.save().map_err(|e| format!("Could not save: {e}"))
+            }
+            Err(_) => Err("settings are unavailable".into()),
+        };
+        let Some(s) = &self.settings else { return };
+        page::push_state(s, &self.cfg);
+        match saved {
+            Ok(()) => page::toast(s, "Saved", false),
+            Err(e) => page::toast(s, &e, true),
         }
     }
 
@@ -254,9 +274,20 @@ impl App {
             }
             Err(_) => Err("settings are unavailable".into()),
         };
+        // Asked now, while the user is setting the corner, rather than the
+        // first time it fires.
+        let untrusted = corners
+            .iter()
+            .any(|c| actions::needs_accessibility(&c.action))
+            && !actions::request_accessibility();
         let Some(s) = &self.settings else { return };
         page::push_state(s, &self.cfg);
         match result {
+            Ok(()) if untrusted => page::toast(
+                s,
+                "Saved. Allow Cantos in Privacy & Security > Accessibility to use it",
+                true,
+            ),
             Ok(()) => page::toast(s, "Saved", false),
             Err(e) => page::toast(s, &e, true),
         }

@@ -25,7 +25,7 @@
 
 use super::child;
 use crate::actions::{CATALOG, UNTESTABLE};
-use crate::config::{Action, Modifier};
+use crate::config::{Action, Modifier, MonitorMode};
 use crate::log::{lerror, linfo};
 use crate::native::NativeCorner;
 
@@ -156,7 +156,10 @@ const CARD_W: f64 = (INNER - CARD_GAP) / 2.0;
 const CARD_H: f64 = 80.0;
 const SELECT_H: f64 = 30.0;
 const KEY_W: f64 = 104.0;
-const PANEL_H: f64 = 86.0;
+/// A row of the General panel: a title, a line under it, a control.
+const PANEL_ROW_H: f64 = 60.0;
+const PANEL_H: f64 = 26.0 + 2.0 * PANEL_ROW_H;
+const MODE_W: f64 = 150.0;
 /// A row of the custom commands panel: heading, then the two fields.
 const COMMAND_ROW_H: f64 = 77.0;
 const SWITCH_W: f64 = 38.0;
@@ -184,6 +187,25 @@ fn key_short(m: Modifier) -> &'static str {
         Modifier::Alt => "\u{2325} Opt",
         Modifier::Win => "\u{2318} Cmd",
     }
+}
+
+/// The monitor modes, with the names the Windows window gives them.
+const MODES: [(MonitorMode, &str); 3] = [
+    (MonitorMode::OuterCorners, "Outer corners"),
+    (MonitorMode::EveryMonitor, "Every screen"),
+    (MonitorMode::PrimaryOnly, "Primary only"),
+];
+
+/// Menu tags for the mode menu, above any corner's.
+const MODE_TAG: usize = 9000;
+
+fn monitor_mode() -> MonitorMode {
+    STATE.with(|s| {
+        s.borrow()
+            .config
+            .as_ref()
+            .map_or(MonitorMode::OuterCorners, |c| c.monitor_mode)
+    })
 }
 
 /// Same presets, and the same names, as the web page.
@@ -259,6 +281,8 @@ fn is_cantos(kind: &str) -> bool {
 #[derive(Deserialize, Default, Clone)]
 struct State {
     #[serde(default)]
+    config: Option<ConfigView>,
+    #[serde(default)]
     native: Option<Vec<NativeCorner>>,
     #[serde(default)]
     displays: Vec<DisplayView>,
@@ -279,9 +303,20 @@ struct DisplayView {
     primary: bool,
 }
 
+/// The part of the config this window shows besides the corners.
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct ConfigView {
+    monitor_mode: MonitorMode,
+}
+
 #[derive(Deserialize, Default, Clone)]
 struct HitboxView {
     corner: String,
+    left: i32,
+    top: i32,
+    right: i32,
+    bottom: i32,
 }
 
 /// What each control is, which decides how it draws and what pressing it does.
@@ -291,6 +326,7 @@ enum Ctl {
     Test(usize),
     ActionSelect(usize),
     KeySelect(usize),
+    ModeSelect,
     Autostart,
     Log,
     Folder,
@@ -313,6 +349,7 @@ struct Ui {
     command_tests: Vec<Retained<Control>>,
     panel: Retained<Panel>,
     switch: Retained<Control>,
+    mode: Retained<Control>,
     links: Vec<Retained<Control>>,
 }
 
@@ -849,13 +886,16 @@ fn draw_diagram(bounds: NSRect, p: &Palette) {
 
     let hovered = HOVERED.with(|c| c.get());
     let corners = corners();
-    let (r, b) = (l + w, t + h);
-    let outer = [(l, t), (r, t), (l, b), (r, b)];
-    for (i, (x, y)) in outer.into_iter().enumerate() {
-        if !state.hitboxes.iter().any(|hb| hb.corner == CORNER_KEYS[i]) {
+    for hb in &state.hitboxes {
+        let Some(i) = CORNER_KEYS.iter().position(|k| *k == hb.corner) else {
             continue;
-        }
-        let at = map(x, y);
+        };
+        // Anchored on the hitbox's outermost edge: the bracket sits exactly
+        // where the cursor has to reach, which on an L-shaped arrangement
+        // is not always a corner of the whole.
+        let x = if i % 2 == 0 { hb.left } else { hb.right };
+        let y = if i < 2 { hb.top } else { hb.bottom };
+        let at = map(x as f64, y as f64);
         let (dx, dy) = (
             if i % 2 == 0 { 1.0 } else { -1.0 },
             if i < 2 { 1.0 } else { -1.0 },
@@ -1030,6 +1070,27 @@ fn draw_panel(view: &NSView) {
         14.0,
         66.0,
         b.size.width - 100.0,
+    );
+    color(p.line_soft).setFill();
+    NSBezierPath::bezierPathWithRect(rect(14.0, 26.0 + PANEL_ROW_H, b.size.width - 28.0, 1.0))
+        .fill();
+    draw_text(
+        "Multiple displays",
+        &font(12.5, 400.0),
+        p.text,
+        1.0,
+        14.0,
+        46.5 + PANEL_ROW_H,
+        300.0,
+    );
+    draw_text(
+        "Where Cantos's own corners are; the Dock's stay its own",
+        &font(11.0, 400.0),
+        p.dim,
+        1.0,
+        14.0,
+        66.0 + PANEL_ROW_H,
+        b.size.width - MODE_W - 40.0,
     );
 }
 
@@ -1275,7 +1336,9 @@ impl Control {
         this.setAccessibilityElement(true);
         let role = unsafe {
             match id {
-                Ctl::ActionSelect(_) | Ctl::KeySelect(_) => NSAccessibilityPopUpButtonRole,
+                Ctl::ActionSelect(_) | Ctl::KeySelect(_) | Ctl::ModeSelect => {
+                    NSAccessibilityPopUpButtonRole
+                }
                 Ctl::Autostart => NSAccessibilityCheckBoxRole,
                 _ => NSAccessibilityButtonRole,
             }
@@ -1285,6 +1348,7 @@ impl Control {
             Ctl::Test(i) => format!("Test {}", CORNER_NAMES[i].to_lowercase()),
             Ctl::ActionSelect(i) => format!("{} action", CORNER_NAMES[i]),
             Ctl::KeySelect(i) => format!("{} key to hold", CORNER_NAMES[i]),
+            Ctl::ModeSelect => "Multiple displays".into(),
             _ => title.into(),
         };
         this.setAccessibilityLabel(Some(&NSString::from_str(&label)));
@@ -1302,7 +1366,7 @@ impl Control {
             s.id
         };
         self.setAccessibilityEnabled(enabled);
-        if let (Some(t), Ctl::ActionSelect(_) | Ctl::KeySelect(_)) = (title, id) {
+        if let (Some(t), Ctl::ActionSelect(_) | Ctl::KeySelect(_) | Ctl::ModeSelect) = (title, id) {
             unsafe { self.setAccessibilityValue(Some(&NSString::from_str(t))) };
         }
         if id == Ctl::Autostart {
@@ -1399,7 +1463,7 @@ fn draw_control(c: &Control) {
             }
         }
         // `select`: sunken, a 7px radius, a chevron on the right.
-        Ctl::ActionSelect(_) | Ctl::KeySelect(_) => {
+        Ctl::ActionSelect(_) | Ctl::KeySelect(_) | Ctl::ModeSelect => {
             let border = if focused {
                 p.accent
             } else if s.hover && s.enabled {
@@ -1489,7 +1553,7 @@ fn press(c: &Control) {
             }));
         }
         Ctl::Test(i) => child::send(&serde_json::json!({ "cmd": "test", "corner": i })),
-        Ctl::ActionSelect(_) | Ctl::KeySelect(_) => open_menu(c, id),
+        Ctl::ActionSelect(_) | Ctl::KeySelect(_) | Ctl::ModeSelect => open_menu(c, id),
         Ctl::Autostart => {
             // Shown at once; the tray answers with what the OS really did.
             STATE.with(|s| s.borrow_mut().autostart = !on);
@@ -1558,6 +1622,12 @@ fn open_menu(c: &Control, id: Ctl) {
                 menu.addItem(&item(label, tag, *m == corners[i].modifier));
             }
         }
+        Ctl::ModeSelect => {
+            let current = monitor_mode();
+            for (n, (m, label)) in MODES.iter().enumerate() {
+                menu.addItem(&item(label, (MODE_TAG + n) as isize, *m == current));
+            }
+        }
         _ => return,
     }
     let b = c.bounds();
@@ -1599,6 +1669,10 @@ define_class!(
         #[unsafe(method(pick:))]
         fn pick(&self, sender: &NSMenuItem) {
             let tag = sender.tag().max(0) as usize;
+            if let Some((mode, _)) = tag.checked_sub(MODE_TAG).and_then(|n| MODES.get(n)) {
+                pick_mode(*mode);
+                return;
+            }
             let (corner, rest) = (tag / 1000, tag % 1000);
             if corner > 3 {
                 return;
@@ -1699,6 +1773,18 @@ fn commit(c: [NativeCorner; 4]) {
     STATE.with(|s| s.borrow_mut().native = Some(c.to_vec()));
     refresh();
     child::send(&serde_json::json!({ "cmd": "native", "corners": c }));
+}
+
+/// Show the new mode at once; the tray's `state` push that follows brings
+/// the diagram's corners for it.
+fn pick_mode(mode: MonitorMode) {
+    STATE.with(|s| {
+        if let Some(c) = s.borrow_mut().config.as_mut() {
+            c.monitor_mode = mode;
+        }
+    });
+    refresh();
+    child::send(&serde_json::json!({ "cmd": "monitorMode", "mode": mode }));
 }
 
 fn quit() {
@@ -1808,6 +1894,8 @@ fn build(mtm: MainThreadMarker) -> Ui {
         unsafe { msg_send![Panel::alloc(mtm), initWithFrame: NSRect::ZERO] };
     let switch = Control::new(mtm, Ctl::Autostart, "Open at login");
     panel.addSubview(&switch);
+    let mode = Control::new(mtm, Ctl::ModeSelect, "");
+    panel.addSubview(&mode);
     root.addSubview(&panel);
 
     let links: Vec<_> = [(Ctl::Log, "Log"), (Ctl::Folder, "Config folder")]
@@ -1835,6 +1923,7 @@ fn build(mtm: MainThreadMarker) -> Ui {
         command_tests,
         panel,
         switch,
+        mode,
         links,
     }
 }
@@ -1917,9 +2006,15 @@ fn layout(ui: &Ui) {
     ui.panel.setFrame(rect(PAD, y, INNER, PANEL_H));
     ui.switch.setFrame(rect(
         INNER - 14.0 - SWITCH_W,
-        26.0 + (PANEL_H - 26.0 - SWITCH_H) / 2.0,
+        26.0 + (PANEL_ROW_H - SWITCH_H) / 2.0,
         SWITCH_W,
         SWITCH_H,
+    ));
+    ui.mode.setFrame(rect(
+        INNER - 14.0 - MODE_W,
+        26.0 + PANEL_ROW_H + (PANEL_ROW_H - SELECT_H) / 2.0,
+        MODE_W,
+        SELECT_H,
     ));
     y += PANEL_H + 16.0;
 
@@ -1981,6 +2076,9 @@ fn refresh() {
             ui.cards[i].setNeedsDisplay(true);
         }
         ui.switch.set(None, true, state.autostart);
+        let mode = monitor_mode();
+        let mode_label = MODES.iter().find(|(m, _)| *m == mode).map_or("", |(_, l)| l);
+        ui.mode.set(Some(mode_label), true, false);
         let text = color(palette(&ui.root).text);
         for (i, (command, args)) in ui.fields.iter().enumerate() {
             command.setTextColor(Some(&text));
@@ -2157,6 +2255,9 @@ pub fn preview(path: &str, dark: bool) -> Result<(), String> {
     };
     STATE.with(|s| {
         *s.borrow_mut() = State {
+            config: Some(ConfigView {
+                monitor_mode: MonitorMode::OuterCorners,
+            }),
             native: Some(vec![
                 corner("lockWorkstation", Modifier::None),
                 corner("taskView", Modifier::None),
@@ -2178,8 +2279,19 @@ pub fn preview(path: &str, dark: bool) -> Result<(), String> {
             }],
             hitboxes: CORNER_KEYS
                 .iter()
-                .map(|k| HitboxView {
-                    corner: (*k).into(),
+                .enumerate()
+                .map(|(i, k)| {
+                    let (x, y) = (
+                        if i % 2 == 0 { 0 } else { 1504 },
+                        if i < 2 { 0 } else { 974 },
+                    );
+                    HitboxView {
+                        corner: (*k).into(),
+                        left: x,
+                        top: y,
+                        right: x + 8,
+                        bottom: y + 8,
+                    }
                 })
                 .collect(),
             version: env!("CARGO_PKG_VERSION").into(),

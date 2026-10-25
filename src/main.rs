@@ -133,6 +133,14 @@ fn main() {
     #[cfg(target_os = "macos")]
     {
         linfo!("hot corners: {:?}", native::read());
+        // A corner set before the permission was lost (a new build, say)
+        // asks again now, not when it next fires.
+        let keystrokes = cfg
+            .lock()
+            .is_ok_and(|c| c.corners.iter().any(actions::needs_accessibility));
+        if keystrokes {
+            actions::request_accessibility();
+        }
         let proxy = proxy.clone();
         native::watch(move || {
             let _ = proxy.send_event(UserEvent::ConfigReloaded);

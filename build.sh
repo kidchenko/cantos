@@ -113,9 +113,31 @@ else
   warn 'iconutil or assets/icon-1024.png missing; the app will use a default icon'
 fi
 
-# Ad-hoc signature: a stable identity for Gatekeeper on this machine. Real
-# distribution wants a Developer ID + notarization (see README).
-codesign --force --sign - "$app" >/dev/null 2>&1 && ok 'ad-hoc signed' || warn 'codesign failed; unsigned'
+# Signed with $CANTOS_SIGN_IDENTITY when set (an "Apple Development" or
+# self-signed code-signing certificate), ad hoc otherwise. Real distribution
+# wants a Developer ID + notarization (see README).
+#
+# macOS keys the Accessibility permission to the signature. With a
+# certificate it survives rebuilds; ad hoc it is tied to this exact binary,
+# so after a rebuild System Settings still shows Cantos switched on while
+# macOS ignores it, and Cantos asks again however often it is allowed. So
+# when an ad-hoc binary changes, its stale entry is cleared: the next prompt
+# adds a fresh one.
+if [ -n "${CANTOS_SIGN_IDENTITY:-}" ]; then
+  codesign --force --sign "$CANTOS_SIGN_IDENTITY" "$app" >/dev/null 2>&1 \
+    && ok "signed as $CANTOS_SIGN_IDENTITY" || warn 'codesign failed; unsigned'
+elif codesign --force --sign - "$app" >/dev/null 2>&1; then
+  ok 'ad-hoc signed'
+  cdhash="$(codesign -dv --verbose=4 "$app" 2>&1 | sed -n 's/^CDHash=//p')"
+  last=target/.cantos-cdhash
+  if [ -n "$cdhash" ] && [ "$cdhash" != "$(cat "$last" 2>/dev/null)" ]; then
+    tccutil reset Accessibility com.kidchenko.cantos >/dev/null 2>&1 \
+      && warn 'new binary: Accessibility for Cantos reset; allow it again when asked'
+    echo "$cdhash" >"$last"
+  fi
+else
+  warn 'codesign failed; unsigned'
+fi
 ok "$app ($version)"
 
 if [ "$dmg" -eq 1 ]; then

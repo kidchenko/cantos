@@ -134,10 +134,54 @@ fn boxes_for(r: Rect, size: i32) -> [(Corner, Rect); 4] {
 ///
 /// Matters for `OuterCorners` on non-rectangular arrangements: with two
 /// screens offset vertically, a corner of the bounding box can sit in dead
-/// space the cursor can never reach. Publishing a hitbox there would mean a
-/// corner that silently never fires, so we drop it instead.
+/// space the cursor can never reach. A hitbox there would be a corner that
+/// silently never fires, so [`stand_in`] finds a real one instead.
 fn on_a_display(monitors: &[MonitorInfo], p: Point) -> bool {
     monitors.iter().any(|m| contains(&m.rect, p))
+}
+
+/// The real corner that takes the place of an outer `corner` sitting in dead
+/// space (an L-shaped arrangement): of the displays' own corners of that
+/// kind, the one nearest `wanted`, the bounding box's.
+///
+/// Only a corner the cursor actually stops in counts: one with no display
+/// beyond it on either side. With a laptop below a wider monitor, the
+/// laptop's bottom corners stand in for the bottom of the arrangement.
+fn stand_in(monitors: &[MonitorInfo], corner: Corner, wanted: Point, size: i32) -> Option<Rect> {
+    let (dx, dy) = match corner {
+        Corner::TopLeft => (-1, -1),
+        Corner::TopRight => (1, -1),
+        Corner::BottomLeft => (-1, 1),
+        Corner::BottomRight => (1, 1),
+    };
+    monitors
+        .iter()
+        .filter_map(|m| {
+            boxes_for(m.rect, size)
+                .into_iter()
+                .find(|(c, _)| *c == corner)
+        })
+        .map(|(_, rect)| (rect, anchor(corner, &rect)))
+        .filter(|(_, p)| {
+            !on_a_display(
+                monitors,
+                Point {
+                    x: p.x + dx,
+                    y: p.y,
+                },
+            ) && !on_a_display(
+                monitors,
+                Point {
+                    x: p.x,
+                    y: p.y + dy,
+                },
+            )
+        })
+        .min_by_key(|(_, p)| {
+            let (x, y) = ((p.x - wanted.x) as i64, (p.y - wanted.y) as i64);
+            x * x + y * y
+        })
+        .map(|(rect, _)| rect)
 }
 
 /// Anchor pixel of a hitbox: the outermost pixel it owns.
@@ -173,7 +217,13 @@ pub fn hitboxes(monitors: &[MonitorInfo], mode: MonitorMode, size: i32) -> Vec<H
         MonitorMode::OuterCorners => {
             if let Some(u) = union(monitors) {
                 for (corner, rect) in boxes_for(u, size) {
-                    if on_a_display(monitors, anchor(corner, &rect)) {
+                    let at = anchor(corner, &rect);
+                    let rect = if on_a_display(monitors, at) {
+                        Some(rect)
+                    } else {
+                        stand_in(monitors, corner, at, size)
+                    };
+                    if let Some(rect) = rect {
                         out.push(Hitbox { corner, rect });
                     }
                 }
@@ -207,9 +257,8 @@ pub fn hitboxes(monitors: &[MonitorInfo], mode: MonitorMode, size: i32) -> Vec<H
 ///
 /// The page draws the real display arrangement rather than a generic
 /// rectangle, and highlights exactly which corners are live. Both come from
-/// here so Rust stays the single source of truth -- a corner dropped for not
-/// sitting on a physical display is then visibly absent in the UI instead of
-/// silently never firing.
+/// here so Rust stays the single source of truth: an outer corner moved off
+/// dead space onto a real display is drawn where it actually is.
 #[derive(Serialize, Clone, Copy, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct DisplayView {
@@ -378,5 +427,100 @@ mod imp {
             },
             is_primary: true,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn screen(left: i32, top: i32, right: i32, bottom: i32, is_primary: bool) -> MonitorInfo {
+        MonitorInfo {
+            rect: Rect {
+                left,
+                top,
+                right,
+                bottom,
+            },
+            is_primary,
+        }
+    }
+
+    fn anchors(boxes: &[Hitbox]) -> Vec<(Corner, (i32, i32))> {
+        boxes.iter().map(|h| (h.corner, h.spot().anchor)).collect()
+    }
+
+    #[test]
+    fn side_by_side_screens_of_one_height_keep_the_outer_corners() {
+        let m = [
+            screen(0, 0, 1920, 1080, true),
+            screen(1920, 0, 3840, 1080, false),
+        ];
+        let boxes = hitboxes(&m, MonitorMode::OuterCorners, 8);
+        assert_eq!(
+            anchors(&boxes),
+            [
+                (Corner::TopLeft, (0, 0)),
+                (Corner::TopRight, (3839, 0)),
+                (Corner::BottomLeft, (0, 1079)),
+                (Corner::BottomRight, (3839, 1079)),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_corner_in_dead_space_moves_to_the_nearest_real_one() {
+        // A laptop under a wider monitor that hangs off to the left: the
+        // bounding box's bottom corners are on neither screen.
+        let m = [
+            screen(0, 0, 1512, 982, true),
+            screen(-223, -1080, 1697, 0, false),
+        ];
+        let boxes = hitboxes(&m, MonitorMode::OuterCorners, 8);
+        assert_eq!(
+            anchors(&boxes),
+            [
+                (Corner::TopLeft, (-223, -1080)),
+                (Corner::TopRight, (1696, -1080)),
+                (Corner::BottomLeft, (0, 981)),
+                (Corner::BottomRight, (1511, 981)),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_shorter_screen_beside_a_taller_one_lends_its_own_corner() {
+        let m = [
+            screen(0, 0, 1920, 1080, true),
+            screen(1920, 0, 4480, 1440, false),
+        ];
+        let boxes = hitboxes(&m, MonitorMode::OuterCorners, 8);
+        let bottom_left = boxes.iter().find(|h| h.corner == Corner::BottomLeft);
+        assert_eq!(bottom_left.map(|h| h.spot().anchor), Some((0, 1079)));
+    }
+
+    #[test]
+    fn a_corner_with_a_screen_beyond_it_never_stands_in() {
+        // The left screen's top-right is nearest, but the cursor carries on
+        // into the right screen there, so it is no corner at all.
+        let m = [
+            screen(0, 0, 1000, 800, true),
+            screen(1000, 0, 2000, 800, false),
+        ];
+        let rect = stand_in(&m, Corner::TopRight, Point { x: 1000, y: -50 }, 8);
+        assert_eq!(
+            rect.map(|r| anchor(Corner::TopRight, &r)),
+            Some(Point { x: 1999, y: 0 })
+        );
+    }
+
+    #[test]
+    fn every_monitor_has_four_corners_each() {
+        let m = [
+            screen(0, 0, 1512, 982, true),
+            screen(-223, -1080, 1697, 0, false),
+        ];
+        assert_eq!(hitboxes(&m, MonitorMode::EveryMonitor, 8).len(), 8);
+        assert_eq!(hitboxes(&m, MonitorMode::PrimaryOnly, 8).len(), 4);
     }
 }

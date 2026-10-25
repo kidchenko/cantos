@@ -44,6 +44,12 @@ pub enum Msg {
     Native {
         corners: Box<[crate::native::NativeCorner; 4]>,
     },
+    /// macOS: which corners Cantos's own actions use on several displays.
+    /// The Dock's corners are the Dock's, whatever this says.
+    #[cfg(target_os = "macos")]
+    MonitorMode {
+        mode: MonitorMode,
+    },
 }
 
 impl Msg {
@@ -115,21 +121,13 @@ pub fn push_autostart(s: &Settings, on: bool, err: Option<&str>) {
 
 /// The real display arrangement and the rectangles that are actually live.
 ///
-/// Computed here, never in the page: a corner dropped for not sitting on a
-/// physical display (L-shaped layouts) then shows as absent in the diagram
-/// instead of being a corner that silently never fires.
+/// Computed here, never in the page: an outer corner moved off dead space
+/// onto a real display (L-shaped layouts) is drawn where it actually is.
 fn geometry_json(cfg: &SharedConfig) -> (serde_json::Value, serde_json::Value) {
     let (mode, size) = cfg
         .lock()
         .map(|c| (c.monitor_mode, c.corner_size))
         .unwrap_or((MonitorMode::OuterCorners, 8));
-    // The Dock's corners are the outer corners of the whole arrangement,
-    // whatever Cantos's own setting says.
-    #[cfg(target_os = "macos")]
-    let mode = {
-        let _ = mode;
-        MonitorMode::OuterCorners
-    };
     let monitors = geometry::monitors();
     let boxes = geometry::hitboxes(&monitors, mode, size);
     (
@@ -156,5 +154,14 @@ mod tests {
         };
         assert_eq!(corners[1].action, Action::TaskView);
         assert_eq!(corners[3].modifier, Modifier::Shift);
+    }
+
+    #[test]
+    fn the_pages_monitor_mode_message_parses() {
+        let body = r#"{"cmd":"monitorMode","mode":"everyMonitor"}"#;
+        let Some(Msg::MonitorMode { mode }) = Msg::parse(body) else {
+            panic!("did not parse as Msg::MonitorMode");
+        };
+        assert_eq!(mode, crate::config::MonitorMode::EveryMonitor);
     }
 }

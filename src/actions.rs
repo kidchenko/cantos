@@ -20,7 +20,7 @@ use crate::log::lwarn;
 
 pub use imp::CATALOG;
 #[cfg(target_os = "macos")]
-pub use imp::UNTESTABLE;
+pub use imp::{needs_accessibility, request_accessibility, UNTESTABLE};
 
 /// `(group, [(kind, label)])`, where `kind` is the action's serialised name.
 /// A `None` group is listed loose, outside any heading.
@@ -382,9 +382,11 @@ mod imp {
 // up at runtime rather than linked; should a future macOS drop it, Cantos
 // falls back to opening the Mission Control app instead of failing to launch.
 //
-// Keystroke actions need the Accessibility permission to reach other apps, so
-// those check for it first and, if it is missing, ask macOS to show the prompt
-// rather than typing into the void.
+// Keystroke actions need the Accessibility permission to reach other apps.
+// It is asked for when such an action is put on a corner (and at launch, if
+// one already is), never when it fires: a prompt that pops up under the
+// cursor in a corner is the worst moment to ask. A corner that fires without
+// it only logs why nothing happened.
 #[cfg(target_os = "macos")]
 mod imp {
     use super::Catalog;
@@ -412,8 +414,8 @@ mod imp {
             }
             Action::DisplayOff => run("/usr/bin/pmset", &["displaysleepnow"]),
             // Cantos's own: the system's shortcuts for these, or the app.
-            Action::DesktopLeft => keys(KEY_LEFT, cg::FLAG_CONTROL),
-            Action::DesktopRight => keys(KEY_RIGHT, cg::FLAG_CONTROL),
+            Action::DesktopLeft => keys(KEY_LEFT, cg::FLAG_CONTROL | ARROW),
+            Action::DesktopRight => keys(KEY_RIGHT, cg::FLAG_CONTROL | ARROW),
             Action::Search => keys(KEY_SPACE, cg::FLAG_COMMAND),
             Action::Emoji => keys(KEY_SPACE, cg::FLAG_CONTROL | cg::FLAG_COMMAND),
             Action::Settings => {
@@ -473,11 +475,20 @@ mod imp {
     const KEY_LEFT: u16 = 0x7B;
     const KEY_RIGHT: u16 = 0x7C;
 
+    /// The flags the keyboard itself puts on an arrow key. Mission Control's
+    /// "Move left/right a space" shortcuts are stored as Control+Fn+arrow, so
+    /// Control alone is ignored; measured on macOS 26, it switches nothing.
+    const ARROW: u64 = cg::FLAG_NUMERIC_PAD | cg::FLAG_FN;
+
     /// Post `key` with exactly `flags` held. Setting the flags on the event,
     /// rather than pressing modifier keys, also means a key the user holds to
     /// arm the corner does not leak into the shortcut.
     fn keys(key: u16, flags: u64) {
-        if !accessibility_trusted() {
+        if !unsafe { cg::AXIsProcessTrusted() } {
+            lwarn!(
+                "keystroke actions need Accessibility permission: System Settings > \
+                 Privacy & Security > Accessibility > Cantos"
+            );
             return;
         }
         unsafe {
@@ -494,17 +505,23 @@ mod imp {
         }
     }
 
+    /// The actions that press a shortcut, which macOS only delivers from an
+    /// app with the Accessibility permission.
+    pub fn needs_accessibility(action: &Action) -> bool {
+        matches!(
+            action,
+            Action::DesktopLeft | Action::DesktopRight | Action::Search | Action::Emoji
+        )
+    }
+
     /// Whether macOS will deliver our keystrokes. If not, ask it to show the
     /// "Cantos would like to control this computer" prompt, which links
     /// straight to the switch in System Settings.
-    fn accessibility_trusted() -> bool {
+    pub fn request_accessibility() -> bool {
         if unsafe { cg::AXIsProcessTrusted() } {
             return true;
         }
-        lwarn!(
-            "keystroke actions need Accessibility permission: System Settings > \
-             Privacy & Security > Accessibility > Cantos"
-        );
+        linfo!("asking for Accessibility permission, for keystroke actions");
         // `{AXTrustedCheckOptionPrompt: true}` as a CFDictionary.
         use objc2_foundation::{NSDictionary, NSNumber, NSString};
         let key = NSString::from_str("AXTrustedCheckOptionPrompt");
