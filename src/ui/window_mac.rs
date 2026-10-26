@@ -1,15 +1,15 @@
 //! The native macOS settings window, in AppKit.
 //!
 //! Run as its own process (`cantos --settings-window`, see [`super::child`]):
-//! it reads the tray's calls from stdin and writes the page's messages to
-//! stdout, so the tray cannot tell it from the web page.
+//! it reads the tray's calls from stdin and writes its messages to stdout,
+//! in the protocol of [`super::window`].
 //!
-//! It is the web page's design, redrawn natively: the same colour tokens, type
+//! It is the original web page's design, redrawn natively: the same colour tokens, type
 //! scale, spacing and components (the stage with its display diagram, pill
 //! chips, corner cards, the panel, the switch, the footer), measured off
 //! the original web page. What native adds: the selects open real macOS menus with SF
 //! Symbols, the card glyphs and the diagram's corners show each action's
-//! symbol, Tab and Space work everywhere with the page's focus ring, and
+//! symbol, Tab and Space work everywhere with the web page's focus ring, and
 //! every control has a VoiceOver role.
 //!
 //! The components are a handful of drawn `NSView`s rather than stock AppKit
@@ -208,7 +208,7 @@ fn monitor_mode() -> MonitorMode {
     })
 }
 
-/// Same presets, and the same names, as the web page.
+/// Same presets, and the same names, as the other windows.
 const PRESET_LIST: [(&str, [&str; 4]); 3] = [
     ("Recommended", ["taskView", "showDesktop", "none", "none"]),
     ("Minimal", ["taskView", "none", "none", "none"]),
@@ -406,7 +406,7 @@ const fn font(size: f64, weight: f64) -> Font {
     }
 }
 
-/// The page's small-caps label: 10.5px, 600, tracked, upper case.
+/// The web page's small-caps label: 10.5px, 600, tracked, upper case.
 const CAPS: Font = Font {
     size: 10.5,
     weight: 600.0,
@@ -496,7 +496,7 @@ fn rounded(r: NSRect, radius: f64, fill: Option<Rgb>, stroke: Option<Rgb>) {
     }
 }
 
-/// The page's focus ring: 2px of accent, offset 2px outside the control.
+/// The web page's focus ring: 2px of accent, offset 2px outside the control.
 fn focus_ring(r: NSRect, radius: f64, p: &Palette) {
     let ring = rect(
         r.origin.x - 3.0,
@@ -538,7 +538,7 @@ fn draw_symbol(kind: &str, size: f64, tint: Rgb, centre: NSPoint) {
     }
 }
 
-/// The page's corner glyph: an L bracket in a 12-unit box, `CORNER_GLYPH`.
+/// The web page's corner glyph: an L bracket in a 12-unit box, `CORNER_GLYPH`.
 fn corner_glyph(i: usize, x: f64, y: f64, size: f64, c: Rgb) {
     let s = size / 12.0;
     let p = |px: f64, py: f64| NSPoint::new(x + px * s, y + py * s);
@@ -557,7 +557,7 @@ fn corner_glyph(i: usize, x: f64, y: f64, size: f64, c: Rgb) {
     path.stroke();
 }
 
-/// The page's inline mark: a dark tile with the lit quarter-disc, 64 units.
+/// The web page's inline mark: a dark tile with the lit quarter-disc, 64 units.
 fn draw_mark(x: f64, y: f64, size: f64, p: &Palette) {
     let s = size / 64.0;
     let tile = rect(x, y, size, size);
@@ -623,7 +623,7 @@ fn repaint_all() {
 }
 
 define_class!(
-    /// The window's content: the page background, the header, the presets
+    /// The window's content: the background, the header, the presets
     /// label and the footer, all of which are text on `--bg`.
     #[unsafe(super(NSView))]
     #[thread_kind = MainThreadOnly]
@@ -792,7 +792,7 @@ define_class!(
     }
 );
 
-/// The diagram's height for an arrangement, by the page's rule: as tall as
+/// The diagram's height for an arrangement, by the web page's rule: as tall as
 /// its shape needs at this width, between 140 and 268.
 fn diagram_height(displays: &[DisplayView]) -> f64 {
     let (w, h) = extent(displays);
@@ -821,7 +821,7 @@ fn draw_diagram(bounds: NSRect, p: &Palette) {
     let t = displays.iter().map(|d| d.top).min().unwrap_or(0) as f64;
     let (w, h) = extent(displays);
 
-    // The page's padding: 24px around the displays, so brackets never clip.
+    // The web page's padding: 24px around the displays, so brackets never clip.
     let pad = 24.0;
     let scale = ((bounds.size.width - 2.0 * pad) / w).min((bounds.size.height - 2.0 * pad) / h);
     let (dw, dh) = (w * scale, h * scale);

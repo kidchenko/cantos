@@ -5,11 +5,11 @@
 //! Each runs in a child process (see [`child`]), started when the window is
 //! opened and gone when it is closed. While the window is up the tray pays for
 //! a UI toolkit; the moment it closes, the tray is back to a few megabytes,
-//! which is the trade this app exists to make. [`page`] is the protocol the
+//! which is the trade this app exists to make. [`window`] is the protocol the
 //! two processes speak.
 
 pub mod child;
-pub mod page;
+pub mod window;
 #[cfg(target_os = "linux")]
 pub mod window_gtk;
 #[cfg(target_os = "macos")]

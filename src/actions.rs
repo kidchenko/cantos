@@ -7,7 +7,7 @@
 //!
 //! [`Action`] is one list for every platform, so a config file means the same
 //! thing wherever it is read. Not every action exists everywhere: each
-//! platform's [`CATALOG`] is what the settings page offers there, and an
+//! platform's [`CATALOG`] is what the settings window offers there, and an
 //! action from another platform's list, say in a hand-edited config, logs
 //! that it is unavailable and does nothing.
 //!
@@ -320,7 +320,7 @@ mod imp {
         combo(keys);
     }
 
-    /// What the settings page offers here, in the order and groups it shows them.
+    /// What the settings window offers here, in the order and groups it shows them.
     pub const CATALOG: Catalog = &[
         (None, &[("none", "Nothing")]),
         (
@@ -720,7 +720,7 @@ mod imp {
         }
     }
 
-    /// What the settings page offers here, in the order and groups it shows them.
+    /// What the settings window offers here, in the order and groups it shows them.
     pub const CATALOG: Catalog = &[
         (None, &[("none", "Nothing")]),
         (

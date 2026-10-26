@@ -1,12 +1,11 @@
-//! The settings page protocol: what the page can ask for, and what we push
-//! back into it.
+//! The settings window protocol: what the window can ask for, and what we
+//! push back into it.
 //!
-//! Three channels, all defined here so the contract is in one file:
+//! Both directions are defined here so the contract is in one file:
 //!
-//!   * page -> Rust is [`Msg`], a JSON object tagged with `cmd`.
-//!   * Rust -> page is the `push_*`/[`toast`] functions, which call
-//!     `window.__hc.<name>(...)` in the document, or send the same call to the
-//!     native window (see [`super::Settings::push`]).
+//!   * window -> tray is [`Msg`], a JSON object tagged with `cmd`.
+//!   * tray -> window is the `push_*`/[`toast`] functions, each a named call
+//!     sent to the window's process (see [`super::Settings::push`]).
 //!
 //! Every argument crosses as a JSON value, never spliced in as text. Paths and
 //! OS error messages end up in these calls, and one stray quote would
@@ -18,11 +17,11 @@ use crate::config::{Config, MonitorMode};
 use crate::{autostart, geometry, log};
 use serde::Deserialize;
 
-/// Commands the settings page can send us.
+/// Commands the settings window can send us.
 #[derive(Deserialize)]
 #[serde(tag = "cmd", rename_all = "camelCase")]
 pub enum Msg {
-    /// Page has loaded and wants the current state.
+    /// The window is up and wants the current state.
     Ready,
     Set {
         config: Box<Config>,
@@ -33,12 +32,12 @@ pub enum Msg {
     Autostart {
         value: bool,
     },
-    /// Restore factory settings. Defaults live in Rust, so the page asks
+    /// Restore factory settings. Defaults live in Rust, so the window asks
     /// rather than hard-coding its own copy that could drift.
     Reset,
     OpenLog,
     OpenConfigDir,
-    /// macOS: the corners as the page now wants them, written to the Dock.
+    /// macOS: the corners as the window now wants them, written to the Dock.
     /// Sent whole, so a preset that changes all four restarts the Dock once.
     #[cfg(target_os = "macos")]
     Native {
@@ -58,7 +57,7 @@ impl Msg {
     }
 }
 
-/// Everything the page needs to render itself from scratch.
+/// Everything the window needs to draw itself from scratch.
 pub fn push_state(s: &Settings, cfg: &SharedConfig) {
     // Take the geometry first: it locks the config, and std mutexes are not
     // reentrant, so doing it while holding `guard` would deadlock.
@@ -71,7 +70,7 @@ pub fn push_state(s: &Settings, cfg: &SharedConfig) {
         .unwrap_or_default();
 
     let Ok(guard) = cfg.lock() else { return };
-    // On a Mac most corners are the Dock's, never config.json's, so the page
+    // On a Mac most corners are the Dock's, never config.json's, so the window
     // gets the effective set, with a key each (see `native::effective`).
     #[cfg(target_os = "macos")]
     let (config, native) = {
@@ -96,7 +95,7 @@ pub fn push_state(s: &Settings, cfg: &SharedConfig) {
 }
 
 /// Just the diagram. Corner size and monitor mode change which rectangles are
-/// live, so it is refreshed from Rust rather than the page guessing.
+/// live, so it is refreshed from Rust rather than the window guessing.
 pub fn push_geometry(s: &Settings, cfg: &SharedConfig) {
     let (displays, hitboxes) = geometry_json(cfg);
     s.push(
@@ -105,7 +104,7 @@ pub fn push_geometry(s: &Settings, cfg: &SharedConfig) {
     );
 }
 
-/// A transient message in the page footer. `bad` colours it as an error.
+/// A transient message in the window's footer. `bad` colours it as an error.
 pub fn toast(s: &Settings, msg: &str, bad: bool) {
     s.push("toast", &[msg.into(), bad.into()]);
 }
@@ -121,7 +120,7 @@ pub fn push_autostart(s: &Settings, on: bool, err: Option<&str>) {
 
 /// The real display arrangement and the rectangles that are actually live.
 ///
-/// Computed here, never in the page: an outer corner moved off dead space
+/// Computed here, never in the window: an outer corner moved off dead space
 /// onto a real display (L-shaped layouts) is drawn where it actually is.
 fn geometry_json(cfg: &SharedConfig) -> (serde_json::Value, serde_json::Value) {
     let (mode, size) = cfg
@@ -143,7 +142,7 @@ mod tests {
 
     /// The exact shape the Mac window sends.
     #[test]
-    fn the_pages_native_message_parses() {
+    fn the_windows_native_message_parses() {
         let body = r#"{"cmd":"native","corners":[
             {"action":{"kind":"lockWorkstation"},"modifier":"none"},
             {"action":{"kind":"taskView"},"modifier":"none"},
@@ -157,7 +156,7 @@ mod tests {
     }
 
     #[test]
-    fn the_pages_monitor_mode_message_parses() {
+    fn the_windows_monitor_mode_message_parses() {
         let body = r#"{"cmd":"monitorMode","mode":"everyMonitor"}"#;
         let Some(Msg::MonitorMode { mode }) = Msg::parse(body) else {
             panic!("did not parse as Msg::MonitorMode");

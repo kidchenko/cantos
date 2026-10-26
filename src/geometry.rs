@@ -253,9 +253,9 @@ pub fn hitboxes(monitors: &[MonitorInfo], mode: MonitorMode, size: i32) -> Vec<H
     out
 }
 
-/// Serialisable views for the settings page.
+/// Serialisable views for the settings window.
 ///
-/// The page draws the real display arrangement rather than a generic
+/// The window draws the real display arrangement rather than a generic
 /// rectangle, and highlights exactly which corners are live. Both come from
 /// here so Rust stays the single source of truth: an outer corner moved off
 /// dead space onto a real display is drawn where it actually is.

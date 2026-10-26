@@ -131,7 +131,7 @@ pub enum MonitorMode {
 /// modifier support in macOS hot corners.
 ///
 /// `Win` is each platform's system key (Windows, Command, Super) and `Alt`
-/// is Option on a Mac. The settings page shows the local names.
+/// is Option on a Mac. The settings window shows the local names.
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 #[serde(rename_all = "camelCase")]
 pub enum Modifier {

@@ -1,18 +1,18 @@
 //! The native Windows settings window, in plain Win32 and GDI.
 //!
 //! Run as its own process (`cantos --settings-window`, see [`super::child`]):
-//! it reads the tray's calls from stdin and writes the page's messages to
-//! stdout, so the tray cannot tell it from the web page.
+//! it reads the tray's calls from stdin and writes its messages to stdout,
+//! in the protocol of [`super::window`].
 //!
-//! One top-level window draws the whole page itself. Every control (switch,
+//! One top-level window draws everything itself. Every control (switch,
 //! chip, select, slider, segmented buttons, links) is a rectangle in a
 //! [`Layout`] that is hit-tested on mouse input and painted into an
-//! off-screen bitmap, so the page's tokens and shapes carry over exactly and
+//! off-screen bitmap, so the web page's tokens and shapes carry over exactly and
 //! nothing flickers. The only real child windows are the custom command
 //! fields, which are `EDIT` controls sitting inside drawn boxes: text editing
 //! (caret, selection, IME, clipboard) is not worth rewriting.
 //!
-//! Layout is worked out in the page's CSS pixels and multiplied by the
+//! Layout is worked out in the web page's CSS pixels and multiplied by the
 //! window's DPI scale at paint time; the binary is PerMonitorV2, so the scale
 //! is per window and changes with `WM_DPICHANGED`.
 //!
@@ -77,7 +77,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 const CORNER_NAMES: [&str; 4] = ["Top left", "Top right", "Bottom left", "Bottom right"];
 const CORNER_KEYS: [&str; 4] = ["topLeft", "topRight", "bottomLeft", "bottomRight"];
-/// The page's `CORNER_GLYPH`: an L bracket per corner, in a 12-unit box.
+/// The web page's `CORNER_GLYPH`: an L bracket per corner, in a 12-unit box.
 const CORNER_GLYPHS: [&str; 4] = ["M1 5V1h4", "M7 1h4v4", "M1 7v4h4", "M11 7v4H7"];
 
 const MODIFIERS: [(&str, &str); 5] = [
@@ -111,7 +111,7 @@ const LINKS: [(&str, &str); 3] = [
 
 const PLACEHOLDERS: [&str; 2] = ["Program, script, document, or URL", "Arguments"];
 
-/// The page's 16x16 stroke glyph per action, `GLYPH` in the original web page.
+/// The web page's 16x16 stroke glyph per action, `GLYPH` in the original web page.
 fn glyph_for(kind: &str) -> &'static str {
     match kind {
         "taskView" => "M2 3h5v4H2zM9 3h5v4H9zM2 9h5v4H2zM9 9h5v4H9z",
@@ -388,7 +388,7 @@ struct Fonts {
 }
 
 impl Fonts {
-    /// The page asks for Segoe UI Variable Text, then Segoe UI. GDI sees the
+    /// The web page asked for Segoe UI Variable Text, then Segoe UI. GDI sees the
     /// variable font's named instances as families of their own, so the
     /// semibold one is asked for by name rather than synthesised from a
     /// weight; a family that is not installed is detected and skipped.
@@ -485,7 +485,7 @@ fn face_is(dc: HDC, font: HFONT, face: &str) -> bool {
 // Layout
 // ---------------------------------------------------------------------------
 
-/// A rectangle in the page's CSS pixels, in content coordinates (scrolling
+/// A rectangle in the web page's CSS pixels, in content coordinates (scrolling
 /// is applied when painting and hit-testing).
 #[derive(Clone, Copy, Default, Debug, PartialEq)]
 struct Area {
@@ -603,7 +603,7 @@ impl Layout {
     }
 }
 
-/// Width of the page's scrollbar, kept clear on the right.
+/// Width of the scrollbar, kept clear on the right.
 const BAR: f32 = 10.0;
 const ROW_H: f32 = 60.0;
 const CMD_ROW_H: f32 = 85.0;
@@ -772,7 +772,7 @@ impl Win {
 
     // -- Layout -------------------------------------------------------------
 
-    /// The page's box model, worked through for the current width and state.
+    /// The web page's box model, worked through for the current width and state.
     fn layout(&self) -> Layout {
         let c = self.config();
         let mut l = Layout::default();
@@ -1089,7 +1089,7 @@ impl Win {
                 let _ = DeleteObject(HBRUSH(old as *mut c_void).into());
             }
         }
-        // Without this a dark page gets a white title bar, which looks broken.
+        // Without this a dark window gets a white title bar, which looks broken.
         let dark: i32 = self.dark as i32;
         unsafe {
             let _ = DwmSetWindowAttribute(
@@ -1108,7 +1108,7 @@ impl Win {
     // -- Editing --------------------------------------------------------------
 
     /// Edit the config, show the edit, and save it once edits pause: a
-    /// dragged slider is one save, not one per step. The page waits 140ms;
+    /// dragged slider is one save, not one per step. The web page waited 140ms;
     /// so does this.
     fn edit(&mut self, f: impl FnOnce(&mut Config)) {
         let Some(c) = self.state.config.as_mut() else {
@@ -1233,7 +1233,7 @@ impl Win {
             .map(|(c, _)| *c)
     }
 
-    /// The scrollbar thumb, in view coordinates, if the page scrolls.
+    /// The scrollbar thumb, in view coordinates, if the content scrolls.
     fn thumb(&self) -> Option<Area> {
         let (vw, vh) = self.view();
         let max = self.max_scroll();
@@ -1324,7 +1324,7 @@ impl Win {
         }
         self.focus_visible = false;
         let Some(ctl) = self.hit(x, y) else {
-            // Clicking nothing blurs whatever had focus, as on the page.
+            // Clicking nothing blurs whatever had focus, as on the web page.
             self.focus = None;
             self.invalidate();
             return vec![Fx::Focus(self.hwnd)];
@@ -1613,7 +1613,7 @@ struct Painter<'a> {
     dy: f32,
     fonts: &'a Fonts,
     /// The stage's `opacity: .45` while paused: colours are mixed with the
-    /// page background instead, which on a flat backdrop is the same thing.
+    /// window background instead, which on a flat backdrop is the same thing.
     fade: Option<u32>,
 }
 
@@ -1713,7 +1713,7 @@ impl Painter<'_> {
         }
     }
 
-    /// The page's focus ring: 2px of accent, `offset` outside the control.
+    /// The web page's focus ring: 2px of accent, `offset` outside the control.
     fn ring(&self, a: Area, radius: f32, offset: f32, accent: u32) {
         let d = offset + 2.0;
         self.round_w(a.grow(d), radius + d, None, Some(accent), 2.0);
@@ -1777,7 +1777,7 @@ impl Painter<'_> {
         }
     }
 
-    /// One of the page's SVG glyphs, its units scaled by `unit`, at `(x, y)`.
+    /// One of the web page's SVG glyphs, its units scaled by `unit`, at `(x, y)`.
     fn glyph(&self, d: &str, (x, y): (f32, f32), unit: f32, c: u32, width: f32, square: bool) {
         for sub in svg_path(d) {
             let pts: Vec<(f32, f32)> = sub
@@ -2001,7 +2001,7 @@ impl Win {
             ring(&p, Ctl::Link(k), a, 4.0, 1.0);
         }
 
-        // The scrollbar: the page's 4px thumb in a 10px gutter.
+        // The scrollbar: the web page's 4px thumb in a 10px gutter.
         if let Some(th) = self.thumb() {
             p.dy = 0.0;
             let c = if self.hover_bar || matches!(self.drag, Drag::Bar(_)) {
@@ -2018,7 +2018,7 @@ impl Win {
         }
     }
 
-    /// The page's inline mark: a dark tile with the lit quarter-disc.
+    /// The web page's inline mark: a dark tile with the lit quarter-disc.
     fn paint_mark(&self, p: &Painter, a: Area) {
         let k = a.w / 64.0;
         let r = p.rect(a);
@@ -2128,7 +2128,7 @@ impl Win {
         self.paint_box(p, a, self.hover == Some(ctl), focused);
         let text = Area::new(a.x + 10.0, a.y, a.w - 10.0 - 24.0, a.h);
         p.text(F::Body, label, text, t.text, DT_LEFT);
-        // The page's chevron: two 5px strokes, 10px in from the right.
+        // The web page's chevron: two 5px strokes, 10px in from the right.
         let (cx, cy) = (a.r() - 13.0, a.cy() + 1.0);
         p.stroke(
             &[(cx - 3.5, cy - 2.0), (cx, cy + 1.5), (cx + 3.5, cy - 2.0)],
@@ -2293,7 +2293,7 @@ impl Win {
     }
 }
 
-/// The few SVG path commands the page's glyphs use (M L H V Z A, either
+/// The few SVG path commands the web page's glyphs use (M L H V Z A, either
 /// case), flattened to polylines.
 fn svg_path(d: &str) -> Vec<Vec<(f32, f32)>> {
     enum Tok {
@@ -2561,7 +2561,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
         }
         WM_MOUSEWHEEL => {
             let delta = hi(wp.0 as isize) as f32;
-            // Chromium's 100px a notch, so it scrolls like the page did.
+            // Chromium's 100px a notch, so it scrolls like the web page did.
             with_win(|w| w.set_scroll(w.scroll - delta / 120.0 * 100.0)).map(|_| LRESULT(0))
         }
         WM_KEYDOWN => {
@@ -2712,7 +2712,7 @@ fn on_edit_command(e: usize, code: u32) {
 }
 
 /// The command fields' procedure: the stock `EDIT` one, plus a placeholder
-/// (the page's, which needs common controls 6 to come for free), and the
+/// (the web page's, which needs common controls 6 to come for free), and the
 /// pointer for the boxes' hover border.
 unsafe extern "system" fn edit_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
     match msg {
@@ -2975,7 +2975,7 @@ pub fn run() {
 
     let mut msg = MSG::default();
     while unsafe { GetMessageW(&mut msg, None, 0, 0) }.0 > 0 {
-        // Tab moves through the page's controls wherever focus is, the
+        // Tab moves through the window's controls wherever focus is, the
         // command fields included, so it is taken before any window sees it.
         if msg.message == WM_KEYDOWN && msg.wParam.0 == VK_TAB.0 as usize {
             let back = unsafe { GetKeyState(VK_SHIFT.0 as i32) } < 0;

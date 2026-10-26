@@ -8,9 +8,9 @@
 //! sharing tao's with the tray.
 //!
 //! The two talk in JSON lines over the child's stdin and stdout, in the same
-//! vocabulary as the web page: the child sends [`super::page::Msg`]s, exactly
-//! what the page posts, and receives `{"push": name, "args": [...]}`, exactly
-//! the calls the page receives as `window.__hc.<name>(...)`. Its stderr is
+//! vocabulary on every platform: the child sends [`super::window::Msg`]s, and
+//! receives `{"push": name, "args": [...]}`, the calls in [`super::window`].
+//! Its stderr is
 //! left alone; the child logs to the same file as the tray.
 
 use crate::log::{linfo, lwarn};

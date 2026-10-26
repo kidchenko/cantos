@@ -54,7 +54,7 @@ pub struct Watcher {
 impl Watcher {
     /// `on_external_change` fires when `config.json` was edited by something
     /// other than us and the running config has been replaced from it, so the
-    /// tray and the settings page can catch up.
+    /// tray and the settings window can catch up.
     pub fn start<F>(cfg: SharedConfig, on_external_change: F) -> Self
     where
         F: Fn() + Send + 'static,
@@ -261,7 +261,7 @@ impl ConfigFile {
         // Without this the watcher could write a just-overtaken config back
         // over a fresh save: the setting would visibly snap back in the
         // settings window, stay wrong for up to a second, then re-apply
-        // itself. The page auto-saves on a 140ms debounce, so dragging a
+        // itself. The window auto-saves on a 140ms debounce, so dragging a
         // slider aims a burst of writes straight at that window.
         if Config::modified() != stamp {
             return false;

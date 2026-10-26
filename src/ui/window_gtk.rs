@@ -1,10 +1,10 @@
 //! The native Linux settings window, in GTK 3.
 //!
 //! Run as its own process (`cantos --settings-window`, see [`super::child`]):
-//! it reads the tray's calls from stdin and writes the page's messages to
-//! stdout, so the tray cannot tell it from the web page.
+//! it reads the tray's calls from stdin and writes its messages to stdout,
+//! in the protocol of [`super::window`].
 //!
-//! The web page's design in GTK widgets: GTK styles with CSS, so the page's
+//! The original web page's design in GTK widgets: GTK styles with CSS, so its
 //! colour tokens and component rules carry over nearly as written (see
 //! [`css`]), and the widgets underneath (combo boxes, scales, switches,
 //! entries) are GTK's own, with its keyboard handling and accessibility.
@@ -25,7 +25,7 @@ use std::time::Duration;
 
 const CORNER_NAMES: [&str; 4] = ["Top left", "Top right", "Bottom left", "Bottom right"];
 const CORNER_KEYS: [&str; 4] = ["topLeft", "topRight", "bottomLeft", "bottomRight"];
-/// The page's corner glyphs, as the four corner brackets in Unicode.
+/// The web page's corner glyphs, as the four corner brackets in Unicode.
 const CORNER_GLYPHS: [&str; 4] = ["\u{231C}", "\u{231D}", "\u{231E}", "\u{231F}"];
 
 const MODIFIERS: [(&str, &str); 5] = [
@@ -359,7 +359,7 @@ fn config() -> Config {
 }
 
 /// Edit the config, show the edit, and save it once edits pause: a dragged
-/// slider is one save, not one per step. The page waits 140ms; so does this.
+/// slider is one save, not one per step. The web page waited 140ms; so does this.
 fn edit(f: impl FnOnce(&mut Config)) {
     if SYNCING.with(|s| s.get()) {
         return;
@@ -948,7 +948,7 @@ fn refresh() {
             .filter(|&i| matches!(c.corners[i], Action::Custom { .. }))
             .collect();
         ui.custom.set_visible(!custom.is_empty());
-        // The first visible row has no top rule, as `h2 + .row` on the page.
+        // The first visible row has no top rule, as `h2 + .row` on the web page.
         for (n, &i) in custom.iter().enumerate() {
             let ctx = ui.custom_rows[i].0.style_context();
             if n == 0 {
@@ -1059,7 +1059,7 @@ fn show_toast(message: &str, bad: bool) {
 // Drawing
 // ---------------------------------------------------------------------------
 
-/// The page's inline mark: a dark tile with the lit quarter-disc, 64 units.
+/// The web page's inline mark: a dark tile with the lit quarter-disc, 64 units.
 fn draw_mark(cr: &gtk::cairo::Context, size: f64) {
     let s = size / 64.0;
     rounded_path(cr, 0.0, 0.0, size, size, 15.0 * s);
@@ -1095,7 +1095,7 @@ fn diagram_height(displays: &[DisplayView]) -> f64 {
     if w <= 0.0 {
         return 190.0;
     }
-    // The page's rule, at this window's width of the diagram.
+    // The web page's rule, at this window's width of the diagram.
     (604.0 * h / w).round().clamp(140.0, 268.0)
 }
 

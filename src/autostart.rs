@@ -142,7 +142,7 @@ mod imp {
 
         /// Only `Enabled` counts. `RequiresApproval` means the user switched
         /// Cantos off in Login Items (or has yet to allow it), and it will not
-        /// run at login, so the settings page should not claim otherwise.
+        /// run at login, so the settings window should not claim otherwise.
         pub fn is_enabled() -> bool {
             unsafe { SMAppService::mainAppService().status() == SMAppServiceStatus::Enabled }
         }

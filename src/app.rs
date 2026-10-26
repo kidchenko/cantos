@@ -8,7 +8,7 @@
 use crate::config::Config;
 use crate::config::SharedConfig;
 use crate::log::{lerror, linfo};
-use crate::ui::page::{self, Msg};
+use crate::ui::window::{self, Msg};
 use crate::ui::{self, Settings};
 use crate::{actions, autostart, log, util};
 
@@ -32,7 +32,7 @@ pub enum UserEvent {
     /// The native settings window's process ended. Carries the generation it
     /// was opened as, so a window closing late cannot clear a newer one.
     SettingsClosed(u64),
-    /// A JSON message from the settings page.
+    /// A JSON message from the settings window.
     Ipc(String),
 }
 
@@ -162,7 +162,7 @@ impl App {
             c.enabled
         };
         self.show_enabled(now);
-        self.refresh_page();
+        self.refresh_window();
     }
 
     fn open_settings(&mut self) {
@@ -208,12 +208,12 @@ impl App {
             lerror!("unparseable IPC message: {body}");
             return;
         };
-        // Every message originates from the page, so the window is open --
+        // Every message originates from the window, so it is open --
         // but it can close between the post and the event being drained.
         //
         // Deliberately a presence check and not `let Some(s) = &self.settings`:
         // holding that borrow across the match would collide with the arms
-        // that need `&mut self`. Arms that talk to the page take the borrow
+        // that need `&mut self`. Arms that talk to the window take the borrow
         // themselves, right where they use it.
         if self.settings.is_none() {
             return;
@@ -221,13 +221,13 @@ impl App {
 
         match msg {
             Msg::Ready => {
-                self.refresh_page();
+                self.refresh_window();
                 #[cfg(target_os = "linux")]
                 if let (Some(s), Some(why)) = (&self.settings, crate::x11::session_warning()) {
-                    page::toast(s, why, true);
+                    window::toast(s, why, true);
                 }
             }
-            Msg::Set { config } => self.save_from_page(*config),
+            Msg::Set { config } => self.save_from_window(*config),
             Msg::Test { corner } => self.test_corner(corner),
             Msg::Reset => self.reset_to_defaults(),
             Msg::OpenLog => log::reveal(),
@@ -255,15 +255,15 @@ impl App {
             Err(_) => Err("settings are unavailable".into()),
         };
         let Some(s) = &self.settings else { return };
-        page::push_state(s, &self.cfg);
+        window::push_state(s, &self.cfg);
         match saved {
-            Ok(()) => page::toast(s, "Saved", false),
-            Err(e) => page::toast(s, &e, true),
+            Ok(()) => window::toast(s, "Saved", false),
+            Err(e) => window::toast(s, &e, true),
         }
     }
 
-    /// Write the corners to the Dock, then show the page what the Dock now
-    /// has, so a failed write cannot leave the page claiming otherwise.
+    /// Write the corners to the Dock, then show the window what the Dock now
+    /// has, so a failed write cannot leave the window claiming otherwise.
     #[cfg(target_os = "macos")]
     fn set_native(&mut self, corners: [crate::native::NativeCorner; 4]) {
         let result = match self.cfg.lock() {
@@ -281,15 +281,15 @@ impl App {
             .any(|c| actions::needs_accessibility(&c.action))
             && !actions::request_accessibility();
         let Some(s) = &self.settings else { return };
-        page::push_state(s, &self.cfg);
+        window::push_state(s, &self.cfg);
         match result {
-            Ok(()) if untrusted => page::toast(
+            Ok(()) if untrusted => window::toast(
                 s,
                 "Saved. Allow Cantos in Privacy & Security > Accessibility to use it",
                 true,
             ),
-            Ok(()) => page::toast(s, "Saved", false),
-            Err(e) => page::toast(s, &e, true),
+            Ok(()) => window::toast(s, "Saved", false),
+            Err(e) => window::toast(s, &e, true),
         }
     }
 
@@ -299,12 +299,12 @@ impl App {
     fn set_autostart(&self, value: bool) {
         let Some(s) = &self.settings else { return };
         match autostart::set(value) {
-            Ok(()) => page::push_autostart(s, value, None),
-            Err(e) => page::push_autostart(s, autostart::is_enabled(), Some(&e)),
+            Ok(()) => window::push_autostart(s, value, None),
+            Err(e) => window::push_autostart(s, autostart::is_enabled(), Some(&e)),
         }
     }
 
-    fn save_from_page(&mut self, config: Config) {
+    fn save_from_window(&mut self, config: Config) {
         let sanitised = config.sanitised();
         let enabled = sanitised.enabled;
         let saved = {
@@ -314,14 +314,14 @@ impl App {
             *guard = sanitised;
             guard.save()
         };
-        // Tray state can drift from the page, so mirror it on every save.
+        // Tray state can drift from the window, so mirror it on every save.
         self.show_enabled(enabled);
 
         let Some(s) = &self.settings else { return };
-        page::push_geometry(s, &self.cfg);
+        window::push_geometry(s, &self.cfg);
         match saved {
-            Ok(()) => page::toast(s, "Saved", false),
-            Err(e) => page::toast(s, &format!("Could not save: {e}"), true),
+            Ok(()) => window::toast(s, "Saved", false),
+            Err(e) => window::toast(s, &format!("Could not save: {e}"), true),
         }
     }
 
@@ -356,12 +356,12 @@ impl App {
         }
         self.show_enabled(Config::default().enabled);
         if let Some(s) = &self.settings {
-            page::push_state(s, &self.cfg);
-            page::toast(s, "Restored defaults", false);
+            window::push_state(s, &self.cfg);
+            window::toast(s, "Restored defaults", false);
         }
     }
 
-    /// Bring the tray and any open page back in line with the config, after
+    /// Bring the tray and any open window back in line with the config, after
     /// something outside this app changed it.
     fn sync_to_config(&mut self) {
         #[cfg(target_os = "macos")]
@@ -372,7 +372,7 @@ impl App {
         }
         let enabled = self.cfg.lock().map(|c| c.enabled).unwrap_or(true);
         self.show_enabled(enabled);
-        self.refresh_page();
+        self.refresh_window();
     }
 
     /// The tray's two representations of the on/off state, updated together
@@ -382,9 +382,9 @@ impl App {
         let _ = self.tray.set_tooltip(Some(tooltip(on)));
     }
 
-    fn refresh_page(&self) {
+    fn refresh_window(&self) {
         if let Some(s) = &self.settings {
-            page::push_state(s, &self.cfg);
+            window::push_state(s, &self.cfg);
         }
     }
 }

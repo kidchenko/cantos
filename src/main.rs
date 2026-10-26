@@ -13,7 +13,7 @@
 //! | `geometry`  | monitors, and the hitboxes derived from them        |
 //! | `actions`   | what a corner does once it fires                    |
 //! | `app`       | the tray icon, its menu, and the settings window    |
-//! | `ui`        | the settings window and its page protocol           |
+//! | `ui`        | the settings window and the protocol it speaks     |
 //!
 //! Platform code sits behind a `mod imp` per module, one for each of Windows,
 //! macOS and Linux, plus platform-only modules: `elevation`, `shell` and
