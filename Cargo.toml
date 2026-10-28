@@ -22,11 +22,19 @@ tray-icon = "0.24"
 # ---------------------------------------------------------------------------
 # Windows
 # ---------------------------------------------------------------------------
+# The settings window's anti-aliased shapes (ui/d2d_win.rs) take its vectors
+# and matrices. Already in the tree via windows.
+[target.'cfg(windows)'.dependencies]
+windows-numerics = "0.3"
+
 [target.'cfg(windows)'.dependencies.windows]
 version  = "0.62"
 features = [
     "Win32_Foundation",
+    "Win32_Graphics_Direct2D",
+    "Win32_Graphics_Direct2D_Common",
     "Win32_Graphics_Dwm",
+    "Win32_Graphics_Dxgi_Common",
     "Win32_Graphics_Gdi",
     "Win32_Security",
     "Win32_System_Com",

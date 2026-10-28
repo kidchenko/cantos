@@ -23,6 +23,7 @@
 //! arrive mid-borrow goes to `DefWindowProcW`.
 
 use super::child;
+use super::d2d_win::D2d;
 use crate::actions::CATALOG;
 use crate::config::{Action, Config, Modifier, MonitorMode};
 use crate::log::{lerror, linfo};
@@ -42,8 +43,8 @@ use windows::Win32::Graphics::Gdi::{
     CreatePen, CreateRoundRectRgn, CreateSolidBrush, DeleteDC, DeleteObject, DrawTextW, Ellipse,
     EndPaint, ExtCreatePen, FillRect, GetDC, GetMonitorInfoW, GetStockObject,
     GetTextExtentPoint32W, GetTextFaceW, GetTextMetricsW, InvalidateRect, MonitorFromWindow,
-    Polyline, ReleaseDC, RoundRect, SelectClipRgn, SelectObject, SetBkColor, SetBkMode,
-    SetTextCharacterExtra, SetTextColor, TextOutW, BS_SOLID, CLEARTYPE_QUALITY,
+    Polyline, ReleaseDC, RoundRect, ScreenToClient, SelectClipRgn, SelectObject, SetBkColor,
+    SetBkMode, SetTextCharacterExtra, SetTextColor, TextOutW, BS_SOLID, CLEARTYPE_QUALITY,
     CLIP_DEFAULT_PRECIS, DEFAULT_CHARSET, DRAW_TEXT_FORMAT, DT_CENTER, DT_END_ELLIPSIS, DT_LEFT,
     DT_NOPREFIX, DT_RIGHT, DT_SINGLELINE, DT_VCENTER, HBRUSH, HDC, HFONT, HGDIOBJ, LOGBRUSH,
     MONITORINFO, MONITOR_DEFAULTTONEAREST, NULL_BRUSH, NULL_PEN, OUT_DEFAULT_PRECIS, PAINTSTRUCT,
@@ -61,18 +62,19 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CallWindowProcW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu,
-    DispatchMessageW, GetClientRect, GetMessageW, GetWindowTextLengthW, GetWindowTextW, IsIconic,
-    KillTimer, LoadCursorW, LoadImageW, PostMessageW, PostQuitMessage, RegisterClassExW,
-    SendMessageW, SetForegroundWindow, SetTimer, SetWindowLongPtrW, SetWindowPos, SetWindowTextW,
-    ShowWindow, TrackPopupMenuEx, TranslateMessage, CS_HREDRAW, CS_VREDRAW, ES_AUTOHSCROLL,
-    GWLP_WNDPROC, HICON, HMENU, ICON_BIG, ICON_SMALL, IDC_ARROW, IMAGE_ICON, LR_DEFAULTCOLOR,
-    MF_CHECKED, MF_SEPARATOR, MF_STRING, MINMAXINFO, MSG, SM_CXICON, SM_CXSMICON, SWP_NOACTIVATE,
-    SWP_NOZORDER, SW_HIDE, SW_RESTORE, SW_SHOW, SW_SHOWNA, TPM_LEFTALIGN, TPM_NONOTIFY,
-    TPM_RETURNCMD, TPM_TOPALIGN, WINDOW_EX_STYLE, WINDOW_STYLE, WM_APP, WM_CAPTURECHANGED, WM_CHAR,
-    WM_CLOSE, WM_COMMAND, WM_CTLCOLOREDIT, WM_DESTROY, WM_DPICHANGED, WM_ERASEBKGND,
-    WM_GETMINMAXINFO, WM_KEYDOWN, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_MOUSEWHEEL,
-    WM_PAINT, WM_SETFOCUS, WM_SETFONT, WM_SETICON, WM_SETTINGCHANGE, WM_SIZE, WM_SYSKEYDOWN,
-    WM_TIMER, WNDCLASSEXW, WNDPROC, WS_CHILD, WS_CLIPCHILDREN, WS_OVERLAPPEDWINDOW,
+    DispatchMessageW, GetClientRect, GetCursorPos, GetMessageW, GetWindowTextLengthW,
+    GetWindowTextW, IsIconic, KillTimer, LoadCursorW, LoadImageW, PostMessageW, PostQuitMessage,
+    RegisterClassExW, SendMessageW, SetCursor, SetForegroundWindow, SetTimer, SetWindowLongPtrW,
+    SetWindowPos, SetWindowTextW, ShowWindow, TrackPopupMenuEx, TranslateMessage, CS_HREDRAW,
+    CS_VREDRAW, ES_AUTOHSCROLL, GWLP_WNDPROC, HICON, HMENU, HTCLIENT, ICON_BIG, ICON_SMALL,
+    IDC_ARROW, IDC_HAND, IDC_IBEAM, IMAGE_ICON, LR_DEFAULTCOLOR, MF_CHECKED, MF_SEPARATOR,
+    MF_STRING, MINMAXINFO, MSG, SM_CXICON, SM_CXSMICON, SWP_NOACTIVATE, SWP_NOZORDER, SW_HIDE,
+    SW_RESTORE, SW_SHOW, SW_SHOWNA, TPM_LEFTALIGN, TPM_NONOTIFY, TPM_RETURNCMD, TPM_TOPALIGN,
+    WINDOW_EX_STYLE, WINDOW_STYLE, WM_APP, WM_CAPTURECHANGED, WM_CHAR, WM_CLOSE, WM_COMMAND,
+    WM_CTLCOLOREDIT, WM_DESTROY, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN,
+    WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_PAINT, WM_SETCURSOR, WM_SETFOCUS,
+    WM_SETFONT, WM_SETICON, WM_SETTINGCHANGE, WM_SIZE, WM_SYSKEYDOWN, WM_TIMER, WNDCLASSEXW,
+    WNDPROC, WS_CHILD, WS_CLIPCHILDREN, WS_OVERLAPPEDWINDOW,
 };
 
 const CORNER_NAMES: [&str; 4] = ["Top left", "Top right", "Bottom left", "Bottom right"];
@@ -666,6 +668,9 @@ struct Win {
     dpi: u32,
     dark: bool,
     fonts: Fonts,
+    /// Anti-aliased shapes; `None` if Direct2D would not start, and GDI
+    /// draws them instead.
+    d2d: Option<D2d>,
     /// A memory DC for measuring text.
     mdc: HDC,
     state: State,
@@ -1225,6 +1230,22 @@ impl Win {
         (x as f32 / s, y as f32 / s + self.scroll)
     }
 
+    /// The page's `cursor`: a hand on anything clickable, a text beam on a
+    /// command field's padding (the field itself sets its own), and the
+    /// arrow elsewhere, the scrollbar included.
+    fn cursor_at(&self, px: i32, py: i32) -> PCWSTR {
+        let vx = px as f32 / self.scale();
+        if self.thumb().is_some() && vx >= self.view().0 - BAR {
+            return IDC_ARROW;
+        }
+        let (x, y) = self.to_content(px, py);
+        match self.hit(x, y) {
+            None => IDC_ARROW,
+            Some(Ctl::Command(_) | Ctl::Args(_)) => IDC_IBEAM,
+            Some(_) => IDC_HAND,
+        }
+    }
+
     fn hit(&self, x: f32, y: f32) -> Option<Ctl> {
         self.lay
             .ctls
@@ -1612,6 +1633,7 @@ struct Painter<'a> {
     s: f32,
     dy: f32,
     fonts: &'a Fonts,
+    d2d: Option<&'a D2d>,
     /// The stage's `opacity: .45` while paused: colours are mixed with the
     /// window background instead, which on a flat backdrop is the same thing.
     fade: Option<u32>,
@@ -1631,11 +1653,21 @@ impl Painter<'_> {
         }
     }
 
-    fn col(&self, c: u32) -> COLORREF {
-        colorref(match self.fade {
+    /// The device-pixel box of `a`, for Direct2D.
+    fn rectf(&self, a: Area) -> (f32, f32, f32, f32) {
+        let r = self.rect(a);
+        (r.left as f32, r.top as f32, r.right as f32, r.bottom as f32)
+    }
+
+    fn rgb(&self, c: u32) -> u32 {
+        match self.fade {
             Some(bg) => mix(c, bg, 0.45),
             None => c,
-        })
+        }
+    }
+
+    fn col(&self, c: u32) -> COLORREF {
+        colorref(self.rgb(c))
     }
 
     /// One CSS pixel, at least one device pixel.
@@ -1657,6 +1689,13 @@ impl Painter<'_> {
     }
 
     fn round_w(&self, a: Area, radius: f32, fill: Option<u32>, border: Option<u32>, width: f32) {
+        if let Some(d) = self.d2d {
+            let fill = fill.map(|c| self.rgb(c));
+            let border = border.map(|c| (self.rgb(c), self.px(width).max(1) as f32));
+            if d.round_rect(self.dc, self.rectf(a), radius * self.s, fill, border) {
+                return;
+            }
+        }
         unsafe {
             let pen: HGDIOBJ = match border {
                 Some(c) => CreatePen(PS_INSIDEFRAME, self.px(width).max(1), self.col(c)).into(),
@@ -1693,6 +1732,12 @@ impl Painter<'_> {
     }
 
     fn circle(&self, a: Area, fill: u32, border: Option<u32>) {
+        if let Some(d) = self.d2d {
+            let border = border.map(|c| (self.rgb(c), self.hair() as f32));
+            if d.ellipse(self.dc, self.rectf(a), self.rgb(fill), border) {
+                return;
+            }
+        }
         unsafe {
             let pen: HGDIOBJ = match border {
                 Some(c) => CreatePen(PS_INSIDEFRAME, self.hair(), self.col(c)).into(),
@@ -1745,6 +1790,21 @@ impl Painter<'_> {
     fn stroke(&self, pts: &[(f32, f32)], c: u32, width: f32, square: bool) {
         if pts.len() < 2 {
             return;
+        }
+        if let Some(d) = self.d2d {
+            let device: Vec<(f32, f32)> = pts
+                .iter()
+                .map(|&(x, y)| (x * self.s, (y + self.dy) * self.s))
+                .collect();
+            if d.polyline(
+                self.dc,
+                &device,
+                self.rgb(c),
+                (width * self.s).max(1.0),
+                square,
+            ) {
+                return;
+            }
         }
         let points: Vec<POINT> = pts
             .iter()
@@ -1799,6 +1859,7 @@ impl Win {
             s,
             dy: 0.0,
             fonts: &self.fonts,
+            d2d: self.d2d.as_ref(),
             fade: None,
         };
         p.fill(
@@ -2021,13 +2082,22 @@ impl Win {
     /// The web page's inline mark: a dark tile with the lit quarter-disc.
     fn paint_mark(&self, p: &Painter, a: Area) {
         let k = a.w / 64.0;
+        let rad = 40.0 * k;
+        let t = self.t();
+        let border = mix(t.text, t.bg, 0.18);
+        if let Some(d) = p.d2d {
+            let disc = ((a.x * p.s, (a.y + p.dy) * p.s), rad * p.s, 0x6ea8fe);
+            if d.mark(p.dc, p.rectf(a), 15.0 * k * p.s, 0x12141f, disc) {
+                p.round(a, 15.0 * k, None, Some(border));
+                return;
+            }
+        }
         let r = p.rect(a);
         let d = p.px(30.0 * k);
         unsafe {
             let rgn = CreateRoundRectRgn(r.left, r.top, r.right + 1, r.bottom + 1, d, d);
             SelectClipRgn(p.dc, Some(rgn));
             p.fill(a, 0x12141f);
-            let rad = 40.0 * k;
             p.circle(
                 Area::new(a.x - rad, a.y - rad, 2.0 * rad, 2.0 * rad),
                 0x6ea8fe,
@@ -2036,8 +2106,7 @@ impl Win {
             SelectClipRgn(p.dc, None);
             let _ = DeleteObject(rgn.into());
         }
-        let t = self.t();
-        p.round(a, 15.0 * k, None, Some(mix(t.text, t.bg, 0.18)));
+        p.round(a, 15.0 * k, None, Some(border));
     }
 
     fn paint_switch(&self, p: &Painter, a: Area, on: bool) {
@@ -2537,6 +2606,9 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
         }
         WM_MOUSEMOVE => with_win(|w| w.mouse_move(lo(lp.0), hi(lp.0))).map(|_| LRESULT(0)),
         WM_MOUSELEAVE => with_win(|w| w.mouse_leave()).map(|_| LRESULT(0)),
+        // Only the client area of this window: the frame's resize edges and
+        // the command fields keep their own cursors.
+        WM_SETCURSOR if lo(lp.0) == HTCLIENT as i32 && wp.0 == hwnd.0 as usize => set_cursor(hwnd),
         WM_LBUTTONDOWN => {
             let fx = with_win(|w| w.mouse_down(lo(lp.0), hi(lp.0)));
             fx.map(|fx| {
@@ -2649,6 +2721,22 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
         Some(r) => r,
         None => unsafe { DefWindowProcW(hwnd, msg, wp, lp) },
     }
+}
+
+/// Show the cursor for whatever is under the pointer, as `cursor_at` picks.
+fn set_cursor(hwnd: HWND) -> Option<LRESULT> {
+    let mut pt = POINT::default();
+    unsafe {
+        let _ = GetCursorPos(&mut pt);
+        let _ = ScreenToClient(hwnd, &mut pt);
+    }
+    let id = WIN.with(|w| {
+        let guard = w.try_borrow().ok()?;
+        Some(guard.as_ref()?.cursor_at(pt.x, pt.y))
+    })?;
+    let cursor = unsafe { LoadCursorW(None, id) }.ok()?;
+    unsafe { SetCursor(Some(cursor)) };
+    Some(LRESULT(1))
 }
 
 fn paint(hwnd: HWND) -> Option<LRESULT> {
@@ -2865,6 +2953,9 @@ fn start() -> Result<HWND, String> {
         dpi,
         dark: true,
         fonts: Fonts::new(dpi as f32 / 96.0),
+        d2d: D2d::new()
+            .map_err(|e| lerror!("Direct2D unavailable, shapes drawn with GDI: {e}"))
+            .ok(),
         mdc: unsafe { CreateCompatibleDC(None) },
         state: State::default(),
         lay: Layout::default(),

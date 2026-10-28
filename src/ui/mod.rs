@@ -9,6 +9,8 @@
 //! two processes speak.
 
 pub mod child;
+#[cfg(windows)]
+mod d2d_win;
 pub mod window;
 #[cfg(target_os = "linux")]
 pub mod window_gtk;

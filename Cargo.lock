@@ -103,6 +103,7 @@ dependencies = [
  "tao",
  "tray-icon",
  "windows",
+ "windows-numerics",
  "winresource",
  "x11-dl",
 ]
