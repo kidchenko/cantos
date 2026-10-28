@@ -14,7 +14,7 @@
 use super::child;
 use crate::actions::CATALOG;
 use crate::config::{Action, Config, Modifier, MonitorMode};
-use crate::log::{lerror, linfo};
+use traykit::{lerror, linfo};
 
 use gtk::glib;
 use gtk::prelude::*;

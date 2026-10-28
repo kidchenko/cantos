@@ -8,6 +8,20 @@ Releases are tagged `vX.Y.Z`, which is what triggers the release workflow.
 
 ## [Unreleased]
 
+### Changed
+
+- **Windows:** the settings window follows the taskbar's light or dark
+  setting rather than the apps' one, as Windows' own tray flyouts do.
+- The log, config folder, single-instance and theme code now comes from
+  traykit, the crate the kidchenko tray apps share. Run-at-login stays
+  Cantos's own, for the macOS Login Items support traykit does not have yet.
+
+### Fixed
+
+- **Windows:** rounded corners, circles and glyph strokes in the settings
+  window are drawn anti-aliased instead of stair-stepped, and the pointer
+  turns into a hand over controls and a text beam over the command fields.
+
 ## [0.0.4] - 2026-10-25
 
 ### Added

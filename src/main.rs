@@ -16,8 +16,10 @@
 //! | `ui`        | the settings window and the protocol it speaks     |
 //!
 //! Platform code sits behind a `mod imp` per module, one for each of Windows,
-//! macOS and Linux, plus platform-only modules: `elevation`, `shell` and
-//! `theme` (Windows), `cg`, `icon` and `native` (macOS), `x11` (Linux).
+//! macOS and Linux, plus platform-only modules: `elevation` and `shell`
+//! (Windows), `cg`, `icon` and `native` (macOS), `x11` (Linux). The pieces
+//! every kidchenko tray app shares (log, config folder, single instance,
+//! theme) come from `traykit`.
 //!
 //! macOS is the odd one out. It has hot corners of its own, in the Dock, so
 //! there Cantos is mostly a front end for those (`native`). Its own detector
@@ -28,10 +30,7 @@ mod app;
 mod autostart;
 mod config;
 mod geometry;
-mod log;
-mod single_instance;
 mod ui;
-mod util;
 
 mod desktop;
 mod trigger;
@@ -41,8 +40,6 @@ mod watcher;
 mod elevation;
 #[cfg(windows)]
 mod shell;
-#[cfg(windows)]
-mod theme;
 
 #[cfg(target_os = "macos")]
 mod cg;
@@ -56,13 +53,18 @@ mod x11;
 
 use app::{App, Flow, UserEvent};
 use config::Config;
-use log::{lerror, linfo};
 use std::sync::{Arc, Mutex};
 use tao::event::{Event, StartCause};
 use tao::event_loop::{ControlFlow, EventLoopBuilder};
+use traykit::{lerror, linfo};
 
 fn main() {
-    log::init();
+    traykit::init(traykit::App {
+        name: "Cantos",
+        id: "cantos",
+        bundle_id: "com.kidchenko.cantos",
+        summary: "Hot corners",
+    });
 
     // The native settings window is this same binary, started by the tray
     // as a child (see ui::child). It has no tray, no single-instance lock and
@@ -100,7 +102,7 @@ fn main() {
 
     // If we are the second launch, the first has been told to show its
     // settings window and there is nothing left for us to do.
-    let Some(signal) = single_instance::acquire() else {
+    let Some(signal) = traykit::single_instance::acquire() else {
         linfo!("another instance owns the tray; asked it to show settings, exiting");
         return;
     };
@@ -236,6 +238,6 @@ fn log_startup() {
     );
     #[cfg(target_os = "linux")]
     if let Some(why) = x11::session_warning() {
-        log::lwarn!("{why}");
+        traykit::lwarn!("{why}");
     }
 }

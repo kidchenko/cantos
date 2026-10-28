@@ -26,8 +26,8 @@
 use super::child;
 use crate::actions::{CATALOG, UNTESTABLE};
 use crate::config::{Action, Modifier, MonitorMode};
-use crate::log::{lerror, linfo};
 use crate::native::NativeCorner;
+use traykit::{lerror, linfo};
 
 use std::cell::{Cell, RefCell};
 use std::io::BufRead;

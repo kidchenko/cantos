@@ -15,9 +15,9 @@
 //! security model, not something to work around; `main` logs it at startup.
 
 use crate::geometry::{MonitorInfo, Point, Rect};
-use crate::log::lwarn;
 use std::cell::RefCell;
 use std::ffi::{c_int, c_long, c_uchar, c_uint, c_ulong, CString};
+use traykit::lwarn;
 use x11_dl::xlib::{self, Display, Xlib};
 use x11_dl::xrandr::Xrandr;
 use x11_dl::xtest::Xf86vmode as XTest;

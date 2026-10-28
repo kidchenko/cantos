@@ -13,10 +13,10 @@
 //! Its stderr is
 //! left alone; the child logs to the same file as the tray.
 
-use crate::log::{linfo, lwarn};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child as Process, ChildStdin, Command, Stdio};
 use std::sync::Mutex;
+use traykit::{linfo, lwarn};
 
 /// The flag that starts the binary as a settings window instead of a tray app.
 pub const FLAG: &str = "--settings-window";

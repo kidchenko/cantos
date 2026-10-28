@@ -1,11 +1,13 @@
-//! Persisted user settings, as JSON in `config.json` under [`Config::dir`]:
-//! `%APPDATA%\Cantos` on Windows, `~/Library/Application Support/Cantos` on
-//! macOS, and `$XDG_CONFIG_HOME/cantos` (usually `~/.config/cantos`) on Linux.
+//! Persisted user settings, as JSON in `config.json` under
+//! `traykit::dirs::config_dir`: `%APPDATA%\Cantos` on Windows,
+//! `~/Library/Application Support/Cantos` on macOS, and
+//! `$XDG_CONFIG_HOME/cantos` (usually `~/.config/cantos`) on Linux. Where the
+//! file lives and how it is read and written is traykit's; what is in it, and
+//! what values are allowed, is this module's.
 
-use crate::log::{lerror, linfo};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use traykit::{lerror, linfo};
 
 /// Config shared between the tray, the settings UI and the watcher.
 pub type SharedConfig = Arc<Mutex<Config>>;
@@ -211,36 +213,12 @@ impl Default for Config {
 }
 
 impl Config {
-    #[cfg(windows)]
-    pub fn dir() -> Option<PathBuf> {
-        std::env::var_os("APPDATA").map(|a| PathBuf::from(a).join("Cantos"))
-    }
-
-    #[cfg(target_os = "macos")]
-    pub fn dir() -> Option<PathBuf> {
-        std::env::var_os("HOME")
-            .map(|h| PathBuf::from(h).join("Library/Application Support/Cantos"))
-    }
-
-    #[cfg(target_os = "linux")]
-    pub fn dir() -> Option<PathBuf> {
-        let base = std::env::var_os("XDG_CONFIG_HOME")
-            .map(PathBuf::from)
-            .filter(|p| p.is_absolute())
-            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))?;
-        Some(base.join("cantos"))
-    }
-
-    pub fn path() -> Option<PathBuf> {
-        Self::dir().map(|d| d.join("config.json"))
-    }
-
     /// Last-modified time of the config file, or `None` if it is not there.
     ///
     /// Used by the watcher to notice a hand edit. Cheap enough to call on a
     /// one-second timer; the file is parsed only when this value moves.
     pub fn modified() -> Option<std::time::SystemTime> {
-        std::fs::metadata(Self::path()?).ok()?.modified().ok()
+        traykit::config::modified()
     }
 
     /// Read and parse the file, without logging or falling back to defaults.
@@ -250,31 +228,24 @@ impl Config {
     /// alone in either case: an editor caught mid-save must not reset
     /// anyone's settings.
     pub fn reload() -> Option<Self> {
-        let text = std::fs::read_to_string(Self::path()?).ok()?;
-        Self::parse(&text).ok()
-    }
-
-    fn parse(text: &str) -> Result<Self, serde_json::Error> {
-        // Strip a UTF-8 BOM. serde_json treats one as a syntax error, and
-        // anyone who edits this file in Notepad or writes it from Windows
-        // PowerShell will have one, and silently resetting their settings would
-        // be a baffling way to greet them.
-        let text = text.strip_prefix('\u{feff}').unwrap_or(text);
-        serde_json::from_str::<Config>(text).map(Config::sanitised)
+        traykit::config::reload::<Config>().map(Config::sanitised)
     }
 
     /// Never fails: a missing, unreadable, or corrupt file just yields
     /// defaults. A tray app that refuses to start because its config got
     /// truncated by a hard power-off would be worse than one that resets.
+    ///
+    /// Not `traykit::config::load`: only a file's values are sanitised, and
+    /// the log line records what was loaded, not just where from.
     pub fn load() -> Self {
-        let Some(path) = Self::path() else {
+        let Some(path) = traykit::config::path() else {
             return Self::default();
         };
         let Ok(text) = std::fs::read_to_string(&path) else {
             linfo!("no config at {}; using defaults", path.display());
             return Self::default();
         };
-        match Self::parse(&text) {
+        match traykit::config::parse::<Config>(&text).map(Config::sanitised) {
             Ok(c) => {
                 linfo!(
                     "config loaded: enabled={} corners={:?} dwell={}ms size={}px mode={:?} fullscreen={} dragging={} modifier={:?}",
@@ -296,16 +267,7 @@ impl Config {
     /// Write via a temp file + rename so an interrupted save can never leave
     /// a half-written config behind.
     pub fn save(&self) -> std::io::Result<()> {
-        let (Some(dir), Some(path)) = (Self::dir(), Self::path()) else {
-            return Err(std::io::Error::other(
-                "no config directory in the environment",
-            ));
-        };
-        std::fs::create_dir_all(&dir)?;
-        let json = serde_json::to_string_pretty(self)?;
-        let tmp = path.with_extension("json.tmp");
-        std::fs::write(&tmp, json)?;
-        std::fs::rename(&tmp, &path)
+        traykit::config::save(self)
     }
 
     /// Clamp anything a hand-edited config could set to a hostile value.

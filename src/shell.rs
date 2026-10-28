@@ -24,7 +24,7 @@
 //! Every one of these returns a bool so the caller can fall back to a
 //! keystroke when no shell equivalent exists or the call fails.
 
-use crate::util::{pcwstr, wide};
+use traykit::util::{pcwstr, wide};
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{LPARAM, WPARAM};
 use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};

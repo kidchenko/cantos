@@ -28,11 +28,11 @@ use crate::actions;
 use crate::config::{Action, Config, MonitorMode, SharedConfig};
 use crate::desktop::{self, System};
 use crate::geometry::{self, contains, Hitbox};
-use crate::log::linfo;
 use crate::trigger::{Tick, Trigger, Tunables};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use traykit::linfo;
 
 const POLL_INTERVAL: Duration = Duration::from_millis(30);
 

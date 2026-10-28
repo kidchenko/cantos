@@ -16,7 +16,7 @@
 //! same idea under three names.
 
 use crate::config::Action;
-use crate::log::lwarn;
+use traykit::lwarn;
 
 pub use imp::CATALOG;
 #[cfg(target_os = "macos")]
@@ -53,9 +53,9 @@ fn unavailable(action: &Action) {
 mod imp {
     use super::Catalog;
     use crate::config::Action;
-    use crate::log::{ldebug, linfo, lwarn};
     use crate::shell;
-    use crate::util::{pcwstr, wide};
+    use traykit::util::{pcwstr, wide};
+    use traykit::{ldebug, linfo, lwarn};
     use windows::Win32::Foundation::{GetLastError, LPARAM, WPARAM};
     use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED};
     use windows::Win32::System::Shutdown::LockWorkStation;
@@ -392,9 +392,9 @@ mod imp {
     use super::Catalog;
     use crate::cg;
     use crate::config::Action;
-    use crate::log::{ldebug, linfo, lwarn};
     use std::ffi::{c_char, c_int, c_void, CStr};
     use std::process::Command;
+    use traykit::{ldebug, linfo, lwarn};
 
     pub fn execute(action: &Action) {
         match action {
@@ -661,10 +661,10 @@ mod imp {
 mod imp {
     use super::Catalog;
     use crate::config::Action;
-    use crate::log::{ldebug, lwarn};
     use crate::x11;
     use std::ffi::{c_long, c_uint};
     use std::process::{Command, Stdio};
+    use traykit::{ldebug, lwarn};
     use x11_dl::keysym::{
         XK_Alt_L, XK_Alt_R, XK_Control_L, XK_Control_R, XK_Print, XK_Shift_L, XK_Shift_R,
         XK_Super_L, XK_Super_R,
@@ -845,9 +845,9 @@ mod imp {
 /// bare name like `Safari` is an app, opened with `open -a`.
 #[cfg(unix)]
 fn run_custom(command: &str, args: &str) {
-    use crate::log::ldebug;
     use std::os::unix::fs::PermissionsExt;
     use std::process::{Command, Stdio};
+    use traykit::ldebug;
 
     let command = command.trim();
     if command.is_empty() {

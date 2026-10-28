@@ -7,10 +7,10 @@
 
 use crate::config::Config;
 use crate::config::SharedConfig;
-use crate::log::{lerror, linfo};
 use crate::ui::window::{self, Msg};
 use crate::ui::{self, Settings};
-use crate::{actions, autostart, log, util};
+use crate::{actions, autostart};
+use traykit::{lerror, linfo};
 
 use tao::event::Event;
 use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
@@ -129,7 +129,7 @@ impl App {
                 self.settings = None;
                 return Flow::Exit;
             }
-            Event::UserEvent(UserEvent::OpenLog) => log::reveal(),
+            Event::UserEvent(UserEvent::OpenLog) => traykit::log::reveal(),
             Event::UserEvent(UserEvent::CheckForUpdates) => check_for_updates(),
             Event::UserEvent(UserEvent::ToggleEnabled) => self.toggle_enabled(),
             Event::UserEvent(UserEvent::OpenSettings) => self.open_settings(),
@@ -230,10 +230,10 @@ impl App {
             Msg::Set { config } => self.save_from_window(*config),
             Msg::Test { corner } => self.test_corner(corner),
             Msg::Reset => self.reset_to_defaults(),
-            Msg::OpenLog => log::reveal(),
+            Msg::OpenLog => traykit::log::reveal(),
             Msg::OpenConfigDir => {
-                if let Some(d) = Config::dir() {
-                    util::shell_open(&d.to_string_lossy());
+                if let Some(d) = traykit::dirs::config_dir() {
+                    traykit::util::shell_open(&d.to_string_lossy());
                 }
             }
             Msg::Autostart { value } => self.set_autostart(value),
@@ -416,7 +416,7 @@ fn tray_image(enabled: bool) -> Result<TrayImage, String> {
 /// Cantos never touches the network itself. The project page compares the
 /// version it is handed with the latest GitHub release and says what to do.
 fn check_for_updates() {
-    util::shell_open(concat!(
+    traykit::util::shell_open(concat!(
         "https://josebarbosa.dev/cantos/?v=",
         env!("CARGO_PKG_VERSION")
     ));

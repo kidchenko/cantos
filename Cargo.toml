@@ -17,6 +17,9 @@ muda = "0.19"
 serde      = { version = "1", features = ["derive"] }
 serde_json = "1"
 tao = "0.37"
+# The log, config folder, single instance and theme every kidchenko tray app
+# shares.
+traykit = { git = "https://github.com/kidchenko/traykit" }
 tray-icon = "0.24"
 
 # ---------------------------------------------------------------------------
@@ -60,9 +63,8 @@ winresource = "0.1"
 # On a Mac the Dock detects the corners and Cantos edits its settings
 # (native.rs), so there is no cursor polling here. The few CoreGraphics and
 # CoreFoundation functions used (displays for the diagram, the Dock's
-# preferences) are declared by hand. `libc` is for localtime_r in the log
-# stamp and dlopen of the private Dock and lock-screen entry points behind the
-# Test button (actions.rs). objc2 is already in the tree via tao and
+# preferences) are declared by hand. `libc` is for dlopen of the private Dock
+# and lock-screen entry points behind the Test button (actions.rs). objc2 is already in the tree via tao and
 # tray-icon; AppKit for the activation policy and the Edit menu, Foundation
 # for the preference values, ServiceManagement for run-at-login.
 [target.'cfg(target_os = "macos")'.dependencies]

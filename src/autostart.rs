@@ -19,7 +19,7 @@ pub use imp::{is_enabled, set};
 // ---------------------------------------------------------------------------
 #[cfg(windows)]
 mod imp {
-    use crate::util::{exe_path_quoted, pcwstr, wide};
+    use traykit::util::{exe_path_quoted, pcwstr, wide};
     use windows::Win32::Foundation::ERROR_SUCCESS;
     use windows::Win32::System::Registry::{
         RegCloseKey, RegDeleteValueW, RegOpenKeyExW, RegQueryValueExW, RegSetValueExW, HKEY,

@@ -55,7 +55,7 @@ pub use imp::report_open_failure;
 /// happens at all, and the log they would need is behind the same tray menu
 /// they have just stopped trusting.
 fn failure_text(error: &str) -> String {
-    let config = crate::config::Config::path()
+    let config = traykit::config::path()
         .map(|p| p.display().to_string())
         .unwrap_or_default();
     format!(
@@ -70,7 +70,7 @@ fn failure_text(error: &str) -> String {
 // ---------------------------------------------------------------------------
 #[cfg(windows)]
 mod imp {
-    use crate::util::{pcwstr, wide};
+    use traykit::util::{pcwstr, wide};
     use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK};
 
     pub fn report_open_failure(error: &str) {
@@ -86,8 +86,8 @@ mod imp {
 // ---------------------------------------------------------------------------
 #[cfg(unix)]
 mod imp {
-    use crate::log::lwarn;
     use std::process::{Command, Stdio};
+    use traykit::lwarn;
 
     /// AppleScript's alert on a Mac, zenity or kdialog on Linux; just the log
     /// when none of them is there.

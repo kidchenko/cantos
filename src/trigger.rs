@@ -22,8 +22,8 @@
 use crate::config::{Config, Corner, Modifier, MonitorMode};
 use crate::desktop::Desktop;
 use crate::geometry::Spot;
-use crate::log::{ldebug, linfo};
 use std::time::{Duration, Instant};
+use traykit::{ldebug, linfo};
 
 /// Settings lifted out of the config once per tick, so the hot path never
 /// clones the `Action` strings.

@@ -32,12 +32,12 @@
 //! System Settings win if both end up set.
 
 use crate::config::{Action, Config, Modifier};
-use crate::log::{linfo, lwarn};
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
 use objc2_foundation::{NSNumber, NSString};
 use serde::{Deserialize, Serialize};
 use std::ffi::c_void;
+use traykit::{linfo, lwarn};
 
 const DOMAIN: &str = "com.apple.dock";
 const KEYS: [&str; 4] = ["tl", "tr", "bl", "br"];

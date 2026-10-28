@@ -14,7 +14,7 @@
 use super::Settings;
 use crate::config::SharedConfig;
 use crate::config::{Config, MonitorMode};
-use crate::{autostart, geometry, log};
+use crate::{autostart, geometry};
 use serde::Deserialize;
 
 /// Commands the settings window can send us.
@@ -62,10 +62,10 @@ pub fn push_state(s: &Settings, cfg: &SharedConfig) {
     // Take the geometry first: it locks the config, and std mutexes are not
     // reentrant, so doing it while holding `guard` would deadlock.
     let (displays, hitboxes) = geometry_json(cfg);
-    let log_path = log::path()
+    let log_path = traykit::log::path()
         .map(|p| p.display().to_string())
         .unwrap_or_default();
-    let config_dir = Config::dir()
+    let config_dir = traykit::dirs::config_dir()
         .map(|p| p.display().to_string())
         .unwrap_or_default();
 

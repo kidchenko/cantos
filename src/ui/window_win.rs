@@ -26,8 +26,8 @@ use super::child;
 use super::d2d_win::D2d;
 use crate::actions::CATALOG;
 use crate::config::{Action, Config, Modifier, MonitorMode};
-use crate::log::{lerror, linfo};
-use crate::util::{pcwstr, wide};
+use traykit::util::{pcwstr, wide};
+use traykit::{lerror, linfo};
 
 use serde::Deserialize;
 use std::cell::{Cell, RefCell};
@@ -1084,7 +1084,7 @@ impl Win {
     // -- Theme ----------------------------------------------------------------
 
     fn apply_theme(&mut self) {
-        self.dark = crate::theme::prefers_dark();
+        self.dark = traykit::theme::taskbar_is_dark();
         let t = self.t();
         EDIT_COLORS.with(|c| c.set((t.text, t.sunken, t.faint)));
         let brush = unsafe { CreateSolidBrush(colorref(t.sunken)) };
